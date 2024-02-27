@@ -8,17 +8,21 @@ from codebook import Codebook
 class VQGAN(nn.Module):
     def __init__(self, args):
         super(VQGAN, self).__init__()
-        self.encoder = Encoder(args).to(device=args.device)
-        self.decoder = Decoder(args).to(device=args.device)
-        self.codebook = Codebook(args).to(device=args.device)
-        self.quant_conv = nn.Conv2d(args.latent_dim, args.latent_dim, 1).to(device=args.device)
-        self.post_quant_conv = nn.Conv2d(args.latent_dim, args.latent_dim, 1).to(device=args.device)
+        self.encoder = Encoder(args).to(device="cuda:0")
+        self.decoder = Decoder(args)
+        self.decoder = self.decoder.to("cuda:1")
+        self.codebook = Codebook(args).to(device="cuda:0")
+        self.quant_conv = nn.Conv2d(args.latent_dim, args.latent_dim, 1).to(device="cuda:0")
+        self.post_quant_conv = nn.Conv2d(args.latent_dim, args.latent_dim, 1)
+        self.post_quant_conv = self.post_quant_conv.to("cuda:1")
 
     def forward(self, imgs):
         encoded_images = self.encoder(imgs)
         quant_conv_encoded_images = self.quant_conv(encoded_images)
         codebook_mapping, codebook_indices, q_loss = self.codebook(quant_conv_encoded_images)
+        codebook_mapping = codebook_mapping.cuda(1)
         post_quant_conv_mapping = self.post_quant_conv(codebook_mapping)
+       
         decoded_images = self.decoder(post_quant_conv_mapping)
 
         return decoded_images, codebook_indices, q_loss

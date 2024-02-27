@@ -6,8 +6,8 @@ from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 import sys
-sys.path.append('/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/')
-from datasets.dtu import DTUDataset
+sys.path.append('/root/autodl-tmp/taming-transformers/')
+from taming.data.dtu import DTUDataset
 
 
 # --------------------------------------------- #

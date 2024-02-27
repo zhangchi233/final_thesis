@@ -3,6 +3,7 @@ import open3d as o3d
 import numpy as np
 
 # from https://github.com/intel-isl/Open3D/blob/master/examples/Python/Advanced/load_save_viewpoint.py
+
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('--dataset_name', type=str, required=True,

@@ -66,8 +66,30 @@ class SL1Loss(nn.Module):
         depth_loss = self.depthloss(results, depths, masks)
         with torch.no_grad():
             loss_original = self.depthloss(result_original, depths, masks)
-          
+        log = {}
+        gt_depth = depths['level_0']
+        mask = masks['level_0']
+        pred_depth = results['depth_0']
+        original_depth = result_original['depth_0']
+
+        log['abs_error'] = abs_error(pred_depth, gt_depth, mask).mean()
+        log['abs_error_original'] = abs_error(original_depth, gt_depth, mask).mean()
+        log['acc_1mm'] = acc_threshold(pred_depth, gt_depth, mask, 1).mean()
+        log['acc_1mm_original'] = acc_threshold(original_depth, gt_depth, mask, 1).mean()
+        log['acc_2mm'] = acc_threshold(pred_depth, gt_depth, mask, 2).mean()
+        log['acc_2mm_original'] = acc_threshold(original_depth, gt_depth, mask, 2).mean()
+        log['acc_3mm'] = acc_threshold(pred_depth, gt_depth, mask, 3).mean()
+        log['acc_3mm_original'] = acc_threshold(original_depth, gt_depth, mask, 3).mean()
+        log['acc_4mm'] = acc_threshold(pred_depth, gt_depth, mask, 4).mean()
+        log['acc_4mm_original'] = acc_threshold(original_depth, gt_depth, mask, 4).mean()
+        # ratio
+        log['abs/abs_original'] = log['abs_error']/log['abs_error_original']
+        log['acc_1mm/acc_1mm_original'] = log['acc_1mm']/log['acc_1mm_original']
+        log['acc_2mm/acc_2mm_original'] = log['acc_2mm']/log['acc_2mm_original']
+        log['acc_3mm/acc_3mm_original'] = log['acc_3mm']/log['acc_3mm_original']
+        log['acc_4mm/acc_4mm_original'] = log['acc_4mm']/log['acc_4mm_original']
+
         
-        return depth_loss, loss_original
+        return depth_loss, loss_original,log
     
         

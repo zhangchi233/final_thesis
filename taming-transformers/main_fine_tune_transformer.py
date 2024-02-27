@@ -232,7 +232,7 @@ if __name__ == "__main__":
     parser = get_parser()
     # parser = Trainer.add_argparse_args(parser)
 
-    # opt, unknown = parser.parse_known_args()
+    opt, unknown = parser.parse_known_args()
     # if opt.name and opt.resume:
     #     raise ValueError(
     #         "-n/--name and -r/--resume cannot be specified both."
@@ -284,8 +284,9 @@ if __name__ == "__main__":
 
     try:
         # init and save configs
-        cfg = "/root/autodl-tmp/taming-transformers/scripts/logs/2020-11-09T13-31-51_sflckr/configs/2020-11-09T13-31-51-project.yaml"
-        ckptdir ="/root/autodl-tmp/taming-transformers/scripts/logs/transformers/checkpoints/last.ckpt"
+        nowname ="transformer test"
+        cfg = "/root/autodl-tmp/taming-transformers/ckpts/logs/2020-11-09T13-31-51_sflckr/configs/2020-11-09T13-31-51-project.yaml"
+        ckptdir ="/root/autodl-tmp/taming-transformers/ckpts/logs/vqgan_imagenet_f16_16384/checkpoints/last.ckpt"
         configs = [OmegaConf.load(cfg)]
         cli = OmegaConf.from_dotlist(unknown)
         config = OmegaConf.merge(*configs, cli)
@@ -310,13 +311,12 @@ if __name__ == "__main__":
                                      monitor="val/loss_diff", mode="min",
                                      filename="{epoch:02d}-{val/rec_loss:.2f}"
                                      )
-        lr_monitor = LearningRateMonitor(logging_interval='step')
-
+        
         trainer = Trainer(
             gpus=1,
             logger=logger,
     
-            callbacks=[checkpoins, lr_monitor],
+            callbacks=[checkpoins],
             max_epochs=20,
             #resume_from_checkpoint=ckptdir,
             progress_bar_refresh_rate=1,

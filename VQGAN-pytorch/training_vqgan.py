@@ -26,18 +26,18 @@ def decode_batch(batch):
 
 class TrainVQGAN:
     def __init__(self, args):
-        self.vqgan = VQGAN(args).to(device=args.device)
+        self.vqgan = VQGAN(args)
         self.discriminator = Discriminator(args).to(device=args.device)
         self.discriminator.apply(weights_init)
-        self.perceptual_loss = LPIPS().eval().to(device=args.device)
+        self.perceptual_loss = LPIPS().eval().to("cuda:1")
         self.opt_vq, self.opt_disc = self.configure_optimizers(args)
 
         self.prepare_training()
 
         
-        # self.depth_loss = SL1Loss()
-        # self.depth_loss = self.depth_loss.to(device=args.device)
-        logger = SummaryWriter("/root/autodl-tmp/VQGAN-pytorch/logs")
+        self.depth_loss = SL1Loss()
+        self.depth_loss = self.depth_loss.to(device=args.device)
+        logger = SummaryWriter("/root/autodl-tmp/VQGAN-pytorch/logs",comment="vqGan",filename_suffix="vagan")
         self.logger = logger
         
 
@@ -68,11 +68,15 @@ class TrainVQGAN:
             T.Normalize(mean=[-0.485, -0.456, -0.406], std=[1, 1, 1]),
         ])
         train_dataset = load_data(args)
+        args.split = "val"
+        val_dataset = load_data(args)
         steps_per_epoch = len(train_dataset)
         for epoch in range(args.epochs):
             with tqdm(range(len(train_dataset))) as pbar:
                 for i, batch in zip(pbar, train_dataset):
                     imgs, proj_mats, depths, masks, init_depth_min, depth_interval = decode_batch(batch)
+                    target_imgs = batch["target_imgs"]
+                    
                     proj_mats = proj_mats.to(device=args.device)
                     init_depth_min = init_depth_min.to(device=args.device)
                     depth_interval = depth_interval.to(device=args.device)
@@ -83,28 +87,41 @@ class TrainVQGAN:
 
 
                     imgs = rearrange(imgs,'b n c h w -> b c h (n w)')
+                    target_imgs = rearrange(target_imgs,'b n c h w -> b c h (n w)')
 
-
-
+                    target_imgs=target_imgs.to(device="cuda:1")
                     imgs = imgs.to(device=args.device)
                     decoded_images, _, q_loss = self.vqgan(imgs)
 
                     disc_real = self.discriminator(imgs)
-                    disc_fake = self.discriminator(decoded_images)
+                    disc_fake = self.discriminator(decoded_images.to(imgs.device))
 
                     disc_factor = self.vqgan.adopt_weight(args.disc_factor, epoch*steps_per_epoch+i, threshold=args.disc_start)
 
-                    perceptual_loss = self.perceptual_loss(imgs, decoded_images)
-                    rec_loss = torch.abs(imgs - decoded_images)
-                    #depth_loss,loss_original = self.depth_loss(decoded_images, imgs, proj_mats, depths, masks, init_depth_min, depth_interval)
+                    perceptual_loss = self.perceptual_loss(target_imgs, decoded_images)
+                    rec_loss = torch.abs(target_imgs - decoded_images)
+                    with torch.no_grad():
+                       
+                        depth_loss,loss_original,log = self.depth_loss(decoded_images.to(imgs.device), \
+                        imgs, proj_mats, depths, masks, init_depth_min, depth_interval)
+                        self.logger.add_scalar('train/Depth_Loss', depth_loss, epoch*steps_per_epoch+i)
+                        self.logger.add_scalar('train/Loss_Original', loss_original, epoch*steps_per_epoch+i)
+                        # # ration depth_loss and loss_original
+                        self.logger.add_scalar('train/Ratio', depth_loss/loss_original, epoch*steps_per_epoch+i)
+                        # Assuming `log` is your dictionary of values
+                        for key, value in log.items():
+                            self.logger.add_scalar(f'train/log/{key}', value, epoch*steps_per_epoch+i)
+
+                        
+
                     perceptual_rec_loss = args.perceptual_loss_factor * perceptual_loss + \
                                             args.rec_loss_factor * rec_loss
                   
                     perceptual_rec_loss = perceptual_rec_loss.mean()
-                    g_loss = -torch.mean(disc_fake)
+                    g_loss = -torch.mean(disc_fake).to(perceptual_rec_loss.device)
 
                     λ,_ = self.vqgan.calculate_lambda(perceptual_rec_loss, g_loss,depth_loss=None)
-                    vq_loss = perceptual_rec_loss + q_loss +\
+                    vq_loss = perceptual_rec_loss + q_loss.to(perceptual_rec_loss.device) +\
                           disc_factor * λ * g_loss #+ miu * depth_loss * args.rec_loss_factor
 
                     d_loss_real = torch.mean(F.relu(1. - disc_real))
@@ -122,35 +139,111 @@ class TrainVQGAN:
 
                     if i % 10 == 0:
                         with torch.no_grad():
-                            imgs = unpreprocess(imgs)
-                            decoded_images = unpreprocess(decoded_images)
+                            target_imgs = unpreprocess(target_imgs).cpu()
+                            imgs = unpreprocess(imgs).cpu()
+                            decoded_images = unpreprocess(decoded_images).cpu()
                             
-                            real_fake_images = torch.cat((imgs[:4], decoded_images.add(1).mul(0.5)[:4]))
-                            vutils.save_image(real_fake_images, os.path.join("/root/autodl-tmp/VQGAN-pytorch/results", f"{epoch}_{i}.jpg"), nrow=4)
-                            self.logger.add_scalar('VQ_Loss', vq_loss, epoch*steps_per_epoch+i)
-                            self.logger.add_scalar('GAN_Loss', gan_loss, epoch*steps_per_epoch+i)
-                            self.logger.add_scalar('Perceptual_Loss', perceptual_loss, epoch*steps_per_epoch+i)
-                            # self.logger.add_scalar('Depth_Loss', depth_loss, epoch*steps_per_epoch+i)
-                            # self.logger.add_scalar('Loss_Original', loss_original, epoch*steps_per_epoch+i)
-                            # # ration depth_loss and loss_original
-                            # self.logger.add_scalar('Ratio', depth_loss/loss_original, epoch*steps_per_epoch+i)
+                            real_fake_images = torch.cat((imgs[:4],target_imgs[:4], decoded_images.add(1).mul(0.5)[:4]))
+                            vutils.save_image(real_fake_images, os.path.join("/root/autodl-tmp/VQGAN-pytorch/results/train", f"{epoch}_{i}.jpg"), nrow=4)
+                            self.logger.add_scalar('train/VQ_Loss', vq_loss, epoch*steps_per_epoch+i)
+                            self.logger.add_scalar('train/GAN_Loss', gan_loss, epoch*steps_per_epoch+i)
+                            self.logger.add_scalar('train/Perceptual_Loss', perceptual_loss, epoch*steps_per_epoch+i)
+                            
                     pbar.set_postfix(
                         VQ_Loss=np.round(vq_loss.cpu().detach().numpy().item(), 5),
                         GAN_Loss=np.round(gan_loss.cpu().detach().numpy().item(), 3)
                     )
                     pbar.update(0)
-                torch.save(self.vqgan.state_dict(), os.path.join("checkpoints", f"vqgan_epoch_{epoch}.pt"))
+            with torch.no_grad():
+                with tqdm(range(len(val_dataset))) as pbar:
+                    for i, batch in zip(pbar, val_dataset):
+                        imgs, proj_mats, depths, masks, init_depth_min, depth_interval = decode_batch(batch)
+                        target_imgs = batch["target_imgs"]
+                        
+                        proj_mats = proj_mats.to(device=args.device)
+                        init_depth_min = init_depth_min.to(device=args.device)
+                        depth_interval = depth_interval.to(device=args.device)
+                        for key in depths:
+                            depths[key] = depths[key].to(device=args.device)
+                        for key in masks:
+                            masks[key] = masks[key].to(device=args.device)
+
+
+                        imgs = rearrange(imgs,'b n c h w -> b c h (n w)')
+                        target_imgs = rearrange(target_imgs,'b n c h w -> b c h (n w)')
+
+                        target_imgs=target_imgs.to(device="cuda:1")
+                        imgs = imgs.to(device=args.device)
+                        decoded_images, _, q_loss = self.vqgan(imgs)
+
+                        disc_real = self.discriminator(imgs)
+                        disc_fake = self.discriminator(decoded_images.to(imgs.device))
+
+                        disc_factor = self.vqgan.adopt_weight(args.disc_factor, epoch*steps_per_epoch+i, threshold=args.disc_start)
+
+                        perceptual_loss = self.perceptual_loss(target_imgs, decoded_images)
+                        rec_loss = torch.abs(target_imgs - decoded_images)
+                        with torch.no_grad():
+                        
+                            depth_loss,loss_original,log = self.depth_loss(decoded_images.to(imgs.device), \
+                            imgs, proj_mats, depths, masks, init_depth_min, depth_interval)
+                            self.logger.add_scalar('val/Depth_Loss', depth_loss, epoch*steps_per_epoch+i)
+                            self.logger.add_scalar('val/Loss_Original', loss_original, epoch*steps_per_epoch+i)
+                            # # ration depth_loss and loss_original
+                            self.logger.add_scalar('val/Ratio', depth_loss/loss_original, epoch*steps_per_epoch+i)
+                            # Assuming `log` is your dictionary of values
+                            for key, value in log.items():
+                                self.logger.add_scalar(f'val/log/{key}', value, epoch*steps_per_epoch+i)
+
+                            
+
+                        perceptual_rec_loss = args.perceptual_loss_factor * perceptual_loss + \
+                                                args.rec_loss_factor * rec_loss
+                    
+                        perceptual_rec_loss = perceptual_rec_loss.mean()
+                        g_loss = -torch.mean(disc_fake).to(perceptual_rec_loss.device)
+
+                        λ,_ = self.vqgan.calculate_lambda(perceptual_rec_loss, g_loss,depth_loss=None)
+                        vq_loss = perceptual_rec_loss + q_loss.to(perceptual_rec_loss.device) +\
+                            disc_factor * λ * g_loss #+ miu * depth_loss * args.rec_loss_factor
+
+                        d_loss_real = torch.mean(F.relu(1. - disc_real))
+                        d_loss_fake = torch.mean(F.relu(1. + disc_fake))
+                        gan_loss = disc_factor * 0.5*(d_loss_real + d_loss_fake)
+
+
+                        if i % 10 == 0:
+                            with torch.no_grad():
+                                target_imgs = unpreprocess(target_imgs).cpu()
+                                imgs = unpreprocess(imgs).cpu()
+                                decoded_images = unpreprocess(decoded_images).cpu()
+                                
+                                real_fake_images = torch.cat((imgs[:4],target_imgs[:4], decoded_images.add(1).mul(0.5)[:4]))
+                                vutils.save_image(real_fake_images, os.path.join("/root/autodl-tmp/VQGAN-pytorch/results/val", f"{epoch}_{i}.jpg"), nrow=4)
+                                self.logger.add_scalar('val/VQ_Loss', vq_loss, epoch*steps_per_epoch+i)
+                                self.logger.add_scalar('val/GAN_Loss', gan_loss, epoch*steps_per_epoch+i)
+                                self.logger.add_scalar('val/Perceptual_Loss', perceptual_loss, epoch*steps_per_epoch+i)
+                                
+                        pbar.set_postfix(
+                            VQ_Loss=np.round(vq_loss.cpu().detach().numpy().item(), 5),
+                            GAN_Loss=np.round(gan_loss.cpu().detach().numpy().item(), 3)
+                        )
+                        pbar.update(0)              
+                
+                
+                
+            torch.save(self.vqgan.state_dict(), os.path.join("checkpoints", f"vqgan_epoch_{epoch}.pt"))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="VQGAN")
     parser.add_argument('--latent-dim', type=int, default=128, help='Latent dimension n_z (default: 256)')
-    parser.add_argument('--image-size', type=int, default=(512,640), help='Image height and width (default: 256)')
+    parser.add_argument('--image-size', type=int, default=(640,512), help='Image height and width (default: 256)')
     parser.add_argument('--num-codebook-vectors', type=int, default=1024, help='Number of codebook vectors (default: 256)')
     parser.add_argument('--beta', type=float, default=0.25, help='Commitment loss scalar (default: 0.25)')
     parser.add_argument('--image-channels', type=int, default=3, help='Number of channels of images (default: 3)')
     parser.add_argument('--dataset-path', type=str, default='/data', help='Path to data (default: /data)')
-    parser.add_argument('--device', type=str, default="cuda", help='Which device the training is on')
+    parser.add_argument('--device', type=str, default="cuda:0", help='Which device the training is on')
     parser.add_argument('--batch-size', type=int, default=1, help='Input batch size for training (default: 6)')
     parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train (default: 50)')
     parser.add_argument('--learning-rate', type=float, default=2.25e-05, help='Learning rate (default: 0.0002)')
