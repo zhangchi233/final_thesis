@@ -6,13 +6,34 @@ from PIL import Image
 import numpy as np
 import torch
 import glob
+import torchvision.transforms as T
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision.utils import save_image
 from models import TransformerNet, VGG16
 from utils import *
-
+import sys
+from einops import rearrange
+from depthLoss import SL1Loss
+sys.path.append("/root/autodl-tmp/taming-transformers/")
+from taming.data.dtu import DTUDataset  
+def denormalize(tensors):
+    unpreprocess =  T.Compose([
+            T.Normalize(mean=[0, 0, 0], std=[1/0.229, 1/0.224, 1/0.225]),
+            T.Normalize(mean=[-0.485, -0.456, -0.406], std=[1, 1, 1]),
+        ])
+    tensors = unpreprocess(tensors)
+    return tensors
+def decode_batch(batch):
+    imgs = batch['imgs']
+    proj_mats = batch['proj_mats']
+    depths = batch['depths']
+    masks = batch['masks']
+    init_depth_min = batch['init_depth_min']
+    depth_interval = batch['depth_interval']
+    
+    return imgs, proj_mats, depths, masks, init_depth_min, depth_interval
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Parser for Fast-Neural-Style")
     parser.add_argument("--dataset_path", type=str, required=True, help="path to training dataset")
@@ -36,7 +57,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Create dataloader for the training data
-    train_dataset = datasets.ImageFolder(args.dataset_path, train_transform(args.image_size))
+    train_dataset = DTUDataset(root_dir = args.dataset_path,split="train")
     dataloader = DataLoader(train_dataset, batch_size=args.batch_size)
 
     # Defines networks
@@ -50,22 +71,23 @@ if __name__ == "__main__":
     # Define optimizer and loss
     optimizer = Adam(transformer.parameters(), args.lr)
     l2_loss = torch.nn.MSELoss().to(device)
+    depth_loss = SL1Loss().to(device)
 
     # Load style image
-    style = style_transform(args.style_size)(Image.open(args.style_image))
-    style = style.repeat(args.batch_size, 1, 1, 1).to(device)
+    # style = style_transform(args.style_size)(Image.open(args.style_image))
+    # style = style.repeat(args.batch_size, 1, 1, 1).to(device)
 
-    # Extract style features
-    features_style = vgg(style)
-    gram_style = [gram_matrix(y) for y in features_style]
+    # # Extract style features
+    # features_style = vgg(style)
+    # gram_style = [gram_matrix(y) for y in features_style]
 
     # Sample 8 images for visual evaluation of the model
-    image_samples = []
-    for path in random.sample(glob.glob(f"{args.dataset_path}/*/*.png"), 8):
-        image_samples += [style_transform(args.image_size)(Image.open(path))]
-    image_samples = torch.stack(image_samples)
+    # image_samples = []
+    # for path in random.sample(glob.glob(f"{args.dataset_path}/*/*.png"), 8):
+    #     image_samples += [style_transform(args.image_size)(Image.open(path))]
+    # image_samples = torch.stack(image_samples)
 
-    def save_sample(batches_done):
+    def save_sample(batches_done,image_samples):
         """ Evaluates the model and saves image samples """
         transformer.eval()
         with torch.no_grad():
@@ -75,8 +97,15 @@ if __name__ == "__main__":
         transformer.train()
 
     for epoch in range(args.epochs):
-        epoch_metrics = {"content": [], "style": [], "total": []}
-        for batch_i, (images, _) in enumerate(dataloader):
+        epoch_metrics = {"content": [], "style": [], "total": [],"depth":[]}
+        for batch_i, batch in enumerate(dataloader):
+            target_imgs = batch['target_imgs']
+
+            images, proj_mats, depths, masks, init_depth_min, depth_interval = decode_batch(batch)
+
+            target_imgs = rearrange(target_imgs, 'b n c h w -> b c h (n w)', n=3)
+            images = rearrange(images, 'b n c h w -> b c h (n w)', n=3)
+
             optimizer.zero_grad()
 
             images_original = images.to(device)
@@ -91,18 +120,24 @@ if __name__ == "__main__":
 
             # Compute style loss as MSE between gram matrices
             style_loss = 0
-            for ft_y, gm_s in zip(features_transformed, gram_style):
-                gm_y = gram_matrix(ft_y)
-                style_loss += l2_loss(gm_y, gm_s[: images.size(0), :, :])
-            style_loss *= args.lambda_style
+            style_loss = l2_loss(images_original, images_transformed)
+            # for ft_y, gm_s in zip(features_transformed, gram_style):
+            #     gm_y = gram_matrix(ft_y)
+            #     style_loss += l2_loss(gm_y, gm_s[: images.size(0), :, :])
+            depth_loss = 0
+            depth_loss,depth_ori,log = depth_loss(features_transformed, images, proj_mats, depths, masks, init_depth_min, depth_interval)
 
-            total_loss = content_loss + style_loss
+            depth_loss *= args.lambda_style
+
+            total_loss = content_loss + depth_loss
             total_loss.backward()
             optimizer.step()
 
             epoch_metrics["content"] += [content_loss.item()]
-            epoch_metrics["style"] += [style_loss.item()]
+            epoch_metrics["depth"] += [depth_loss.item()]
             epoch_metrics["total"] += [total_loss.item()]
+            epoch_metrics["style"] += [style_loss.item()]
+
 
             sys.stdout.write(
                 "\r[Epoch %d/%d] [Batch %d/%d] [Content: %.2f (%.2f) Style: %.2f (%.2f) Total: %.2f (%.2f)]"
@@ -113,8 +148,8 @@ if __name__ == "__main__":
                     len(train_dataset),
                     content_loss.item(),
                     np.mean(epoch_metrics["content"]),
-                    style_loss.item(),
-                    np.mean(epoch_metrics["style"]),
+                    depth_loss.item(),
+                    np.mean(epoch_metrics["depth"]),
                     total_loss.item(),
                     np.mean(epoch_metrics["total"]),
                 )
@@ -122,7 +157,7 @@ if __name__ == "__main__":
 
             batches_done = epoch * len(dataloader) + batch_i + 1
             if batches_done % args.sample_interval == 0:
-                save_sample(batches_done)
+                save_sample(batches_done,images)
 
             if args.checkpoint_interval > 0 and batches_done % args.checkpoint_interval == 0:
                 style_name = os.path.basename(args.style_image).split(".")[0]
