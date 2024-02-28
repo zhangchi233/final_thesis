@@ -13,10 +13,14 @@ from torchvision import datasets
 from torchvision.utils import save_image
 from models import TransformerNet, VGG16
 from utils import *
+from deptLoss import SL1Loss
 import sys
 from einops import rearrange
-from depthLoss import SL1Loss
+from tqdm import tqdm
+sys.path.append("/root/autodl-tmp/Fast-Neural-Style-Transfer/")
 sys.path.append("/root/autodl-tmp/taming-transformers/")
+
+
 from taming.data.dtu import DTUDataset  
 def denormalize(tensors):
     unpreprocess =  T.Compose([
@@ -36,7 +40,7 @@ def decode_batch(batch):
     return imgs, proj_mats, depths, masks, init_depth_min, depth_interval
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Parser for Fast-Neural-Style")
-    parser.add_argument("--dataset_path", type=str, required=True, help="path to training dataset")
+    parser.add_argument("--dataset_path", type=str, required=True,default = "/root/autodl-tmp/mvs_training", help="path to training dataset")
     parser.add_argument("--style_image", type=str, default="style-images/mosaic.jpg", help="path to style image")
     parser.add_argument("--epochs", type=int, default=1, help="Number of training epochs")
     parser.add_argument("--batch_size", type=int, default=4, help="Batch size for training")
@@ -47,8 +51,8 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
     parser.add_argument("--checkpoint_model", type=str, help="Optional path to checkpoint model")
     parser.add_argument("--checkpoint_interval", type=int, default=2000, help="Batches between saving model")
-    parser.add_argument("--sample_interval", type=int, default=1000, help="Batches between saving image samples")
-    args = parser.parse_args()
+    parser.add_argument("--sample_interval", type=int, default=100, help="Batches between saving image samples")
+    args = parser.parse_args(["--dataset_path","/root/autodl-tmp/mvs_training/dtu"])
 
     style_name = args.style_image.split("/")[-1].split(".")[0]
     os.makedirs(f"images/outputs/{style_name}-training", exist_ok=True)
@@ -71,7 +75,7 @@ if __name__ == "__main__":
     # Define optimizer and loss
     optimizer = Adam(transformer.parameters(), args.lr)
     l2_loss = torch.nn.MSELoss().to(device)
-    depth_loss = SL1Loss().to(device)
+    cal_depthloss = SL1Loss().to(device)
 
     # Load style image
     # style = style_transform(args.style_size)(Image.open(args.style_image))
@@ -93,12 +97,13 @@ if __name__ == "__main__":
         with torch.no_grad():
             output = transformer(image_samples.to(device))
         image_grid = denormalize(torch.cat((image_samples.cpu(), output.cpu()), 2))
-        save_image(image_grid, f"images/outputs/{style_name}-training/{batches_done}.jpg", nrow=4)
+        save_image(image_grid, f"/root/autodl-tmp/images/outputs/{style_name}-training/{batches_done}.jpg", nrow=4)
         transformer.train()
 
     for epoch in range(args.epochs):
         epoch_metrics = {"content": [], "style": [], "total": [],"depth":[]}
-        for batch_i, batch in enumerate(dataloader):
+        tqdm_bar = tqdm(dataloader)
+        for batch_i, batch in enumerate(tqdm_bar):
             target_imgs = batch['target_imgs']
 
             images, proj_mats, depths, masks, init_depth_min, depth_interval = decode_batch(batch)
@@ -124,12 +129,12 @@ if __name__ == "__main__":
             # for ft_y, gm_s in zip(features_transformed, gram_style):
             #     gm_y = gram_matrix(ft_y)
             #     style_loss += l2_loss(gm_y, gm_s[: images.size(0), :, :])
-            depth_loss = 0
-            depth_loss,depth_ori,log = depth_loss(features_transformed, images, proj_mats, depths, masks, init_depth_min, depth_interval)
+            
+            depth_loss,depth_ori,log = cal_depthloss(images_transformed, images_original, proj_mats, depths, masks, init_depth_min, depth_interval)
 
             depth_loss *= args.lambda_style
 
-            total_loss = content_loss + depth_loss
+            total_loss = content_loss + depth_loss + style_loss
             total_loss.backward()
             optimizer.step()
 
@@ -139,20 +144,27 @@ if __name__ == "__main__":
             epoch_metrics["style"] += [style_loss.item()]
 
 
-            sys.stdout.write(
-                "\r[Epoch %d/%d] [Batch %d/%d] [Content: %.2f (%.2f) Style: %.2f (%.2f) Total: %.2f (%.2f)]"
-                % (
-                    epoch + 1,
-                    args.epochs,
-                    batch_i,
-                    len(train_dataset),
-                    content_loss.item(),
-                    np.mean(epoch_metrics["content"]),
-                    depth_loss.item(),
-                    np.mean(epoch_metrics["depth"]),
-                    total_loss.item(),
-                    np.mean(epoch_metrics["total"]),
-                )
+            # sys.stdout.write(
+            #     "\r[Epoch %d/%d] [Batch %d/%d] [Content: %.2f (%.2f) Style: %.2f (%.2f) Total: %.2f (%.2f)]"
+            #     % (
+            #         epoch + 1,
+            #         args.epochs,
+            #         batch_i,
+            #         len(train_dataset),
+            #         content_loss.item(),
+            #         np.mean(epoch_metrics["content"]),
+            #         depth_loss.item(),
+            #         np.mean(epoch_metrics["depth"]),
+            #         total_loss.item(),
+            #         np.mean(epoch_metrics["total"]),
+            #     )
+            # )
+            tqdm_bar.set_postfix_str(
+                f"[Epoch {epoch + 1}/{args.epochs}] [Batch {batch_i}/{len(train_dataset)}] "
+                f"[Content: {np.mean(epoch_metrics['content']):.2f}] "
+                f"[Depth: {np.mean(epoch_metrics['depth']):.2f}] "
+                f"[Style: {np.mean(epoch_metrics['style']):.2f}] "
+                f"[Total: {np.mean(epoch_metrics['total']):.2f}]"
             )
 
             batches_done = epoch * len(dataloader) + batch_i + 1

@@ -33,7 +33,7 @@ def acc_threshold(depth_pred, depth_gt, mask, threshold):
     return acc_mask.float()
 
 class SL1Loss(nn.Module):
-    def __init__(self, levels=3,nviews = 3):
+    def __init__(self, levels=3,nviews = 3,device="cuda"):
         super(SL1Loss, self).__init__()
         self.levels = levels
         self.loss = nn.SmoothL1Loss(reduction='mean')
@@ -43,7 +43,7 @@ class SL1Loss(nn.Module):
                         
                         norm_act=ABN).cuda()
         load_ckpt(model, '/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/ckpts/_ckpt_epoch_10.ckpt')
-        self.model = model
+        self.model = model.to(device)
         for param in self.model.parameters():
             param.requires_grad = False
         self.nviews = nviews
@@ -66,6 +66,7 @@ class SL1Loss(nn.Module):
             masks[key] = masks[key].to(imgs.device)
         init_depth_min = init_depth_min.to(imgs.device)
         depth_interval = depth_interval.to(imgs.device)
+        assert imgs.device == proj_mats.device == depths['level_0'].device == masks['level_0'].device == init_depth_min.device == depth_interval.device
 
         results = self.model(preds, proj_mats, init_depth_min, depth_interval)
         result_original = self.model(imgs, proj_mats, init_depth_min, depth_interval)
