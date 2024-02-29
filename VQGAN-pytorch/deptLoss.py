@@ -64,8 +64,8 @@ class SL1Loss(nn.Module):
         results = self.model(preds, proj_mats, init_depth_min, depth_interval)
         result_original = self.model(imgs, proj_mats, init_depth_min, depth_interval)
         depth_loss = self.depthloss(results, depths, masks)
-        with torch.no_grad():
-            loss_original = self.depthloss(result_original, depths, masks)
+        
+        loss_original = self.depthloss(result_original, depths, masks)
         log = {}
         gt_depth = depths['level_0']
         mask = masks['level_0']

@@ -42,8 +42,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Parser for Fast-Neural-Style")
     parser.add_argument("--dataset_path", type=str, required=True,default = "/root/autodl-tmp/mvs_training", help="path to training dataset")
     parser.add_argument("--style_image", type=str, default="style-images/mosaic.jpg", help="path to style image")
-    parser.add_argument("--epochs", type=int, default=1, help="Number of training epochs")
-    parser.add_argument("--batch_size", type=int, default=4, help="Batch size for training")
+    parser.add_argument("--epochs", type=int, default=1000, help="Number of training epochs")
+    parser.add_argument("--batch_size", type=int, default=2, help="Batch size for training")
     parser.add_argument("--image_size", type=int, default=256, help="Size of training images")
     parser.add_argument("--style_size", type=int, help="Size of style image")
     parser.add_argument("--lambda_content", type=float, default=1e5, help="Weight for content loss")
@@ -52,7 +52,8 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint_model", type=str, help="Optional path to checkpoint model")
     parser.add_argument("--checkpoint_interval", type=int, default=2000, help="Batches between saving model")
     parser.add_argument("--sample_interval", type=int, default=100, help="Batches between saving image samples")
-    args = parser.parse_args(["--dataset_path","/root/autodl-tmp/mvs_training/dtu"])
+    args = parser.parse_args(["--dataset_path","/root/autodl-tmp/mvs_training/dtu",
+                              "--checkpoint_model","/root/autodl-tmp/checkpoints/mosaic_12000.pth"])
 
     style_name = args.style_image.split("/")[-1].split(".")[0]
     os.makedirs(f"images/outputs/{style_name}-training", exist_ok=True)
@@ -61,7 +62,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Create dataloader for the training data
-    train_dataset = DTUDataset(root_dir = args.dataset_path,split="train")
+    train_dataset = DTUDataset(root_dir = args.dataset_path,split="val")
     dataloader = DataLoader(train_dataset, batch_size=args.batch_size)
 
     # Defines networks
@@ -103,6 +104,7 @@ if __name__ == "__main__":
     for epoch in range(args.epochs):
         epoch_metrics = {"content": [], "style": [], "total": [],"depth":[]}
         tqdm_bar = tqdm(dataloader)
+        
         for batch_i, batch in enumerate(tqdm_bar):
             target_imgs = batch['target_imgs']
 
@@ -121,25 +123,26 @@ if __name__ == "__main__":
             features_transformed = vgg(images_transformed)
 
             # Compute content loss as MSE between features
-            content_loss = args.lambda_content * l2_loss(features_transformed.relu2_2, features_original.relu2_2)
+            with torch.no_grad():
+              content_loss =  l2_loss(features_transformed.relu2_2, features_original.relu2_2)
 
             # Compute style loss as MSE between gram matrices
             style_loss = 0
-            style_loss = l2_loss(images_original, images_transformed)
+            style_loss = l2_loss(images_original, images_transformed)*10
             # for ft_y, gm_s in zip(features_transformed, gram_style):
             #     gm_y = gram_matrix(ft_y)
             #     style_loss += l2_loss(gm_y, gm_s[: images.size(0), :, :])
             
             depth_loss,depth_ori,log = cal_depthloss(images_transformed, images_original, proj_mats, depths, masks, init_depth_min, depth_interval)
+            depthloss = (depth_loss-depth_ori)*10
 
-            depth_loss *= args.lambda_style
 
-            total_loss = content_loss + depth_loss + style_loss
+            total_loss = depthloss + style_loss
             total_loss.backward()
             optimizer.step()
 
             epoch_metrics["content"] += [content_loss.item()]
-            epoch_metrics["depth"] += [depth_loss.item()]
+            epoch_metrics["depth"] += [depth_loss.item()/depth_ori.item()]
             epoch_metrics["total"] += [total_loss.item()]
             epoch_metrics["style"] += [style_loss.item()]
 
@@ -166,9 +169,10 @@ if __name__ == "__main__":
                 f"[Style: {np.mean(epoch_metrics['style']):.2f}] "
                 f"[Total: {np.mean(epoch_metrics['total']):.2f}]"
             )
-
+            
             batches_done = epoch * len(dataloader) + batch_i + 1
             if batches_done % args.sample_interval == 0:
+
                 save_sample(batches_done,images)
 
             if args.checkpoint_interval > 0 and batches_done % args.checkpoint_interval == 0:

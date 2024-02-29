@@ -9,12 +9,12 @@ Our code is based on cuda and can perform deformation in any dimension of 3D con
 <img src="https://raw.github.com/XinyiYing/D3Dnet/master/images/Network.jpg" width="512"/><br>
 
 ### Architecture of D3D
-<img src="https://raw.github.com/XinyiYing/D3Dnet/master/images/D3D.jpg" width="1024"/><br>
+<img src="https://raw.github.com/XinyiYing/D3Dnet/mastKfVySo/PxzBVer/images/D3D.jpg" width="1024"/><br>
 
 ## Requirements
 - Python 3
 - pytorch (1.0.0), torchvision (0.2.2) / pytorch (1.2.0), torchvision (0.4.0) 
-- numpy, PIL
+- numpy, PILKfVySo/PxzBV
 - Visual Studio 2015
 
 ## Build

@@ -1,16 +1,18 @@
 from math import sqrt
 import sys
 sys.path.append('/root/autodl-tmp/project/dp_simple/')
+sys.path.append("/root/autodl-tmp/taming-transformers")
 #import ViT
 from torchvision import transforms as T
 from CasMVSNet_pl.models.mvsnet import CascadeMVSNet
 from CasMVSNet_pl.utils import load_ckpt
 from CasMVSNet_pl.datasets.dtu import DTUDataset  
 from CasMVSNet_pl.utils import *
-from CasMVSNet_pl.datasets.dtu import DTUDataset 
+from data_utils import *
+from taming.data.dtu import DTUDataset 
 from CasMVSNet_pl.metrics import *  
 from inplace_abn import ABN
-
+from torchvision import utils as vutils
 import pytorch_ssim
 import pytorch_lightning as pl
 
@@ -132,7 +134,7 @@ class Net(pl.LightningModule):
         self.lr = configs.lr
         self.unpreprocess = T.Normalize(mean=[-0.485/0.229, -0.456/0.224, -0.406/0.225], 
                                         std=[1/0.229, 1/0.224, 1/0.225])
-        
+        self.l2_loss = nn.MSELoss()
 
     def make_layer(self, block, num_of_layer):
         layers = []
@@ -171,86 +173,112 @@ class Net(pl.LightningModule):
         init_depth_min = batch['init_depth_min']
         depth_interval = batch['depth_interval']
         return imgs, proj_mats, depths, masks, init_depth_min, depth_interval
+    
     def predict_step(self,imgs):
         imgs = imgs.transpose(1, 2)
         new_imgs = self.forward(imgs)
         return new_imgs.transpose(1, 2)
     def training_step(self, batch, batch_idx):
         imgs, proj_mats, depths, masks, init_depth_min, depth_interval = self.decode_batch(batch)
+        target_imgs = batch['target_imgs']
+
+        target_imgs,imgs = random_crop(target_imgs,imgs , 128, 1)
+        
+
         imgs = imgs.transpose(1, 2)
         new_imgs = self.forward(imgs)
-        results = self.depthmodel(new_imgs.transpose(1, 2), proj_mats, init_depth_min, depth_interval)
-        result_original = self.depthmodel(imgs.transpose(1,2), proj_mats, init_depth_min, depth_interval)
-        loss_original = self.calculate_depthloss(result_original, depths, masks)
-        loss_depth = self.calculate_depthloss(results, depths, masks)
-        content_loss = self.calculate_contentloss(new_imgs, imgs)*self.lambda_content
+        
 
-
-
-       
-        loss = loss_depth+content_loss
+        
+        target_imgs = target_imgs.transpose(1, 2)
+        loss = self.l2_loss(new_imgs, target_imgs)
         self.log("train/loss", loss, on_step=True, on_epoch=True)
-        self.log('train/content_loss', content_loss, on_step=True, on_epoch=True)
-        self.log('train/depth_loss', loss_depth, on_step=True, on_epoch=True)
-        self.log('train: refined/original', loss_depth/(1e-10 + loss_original), on_step=True, on_epoch=True)
-       
-        log ={}
         with torch.no_grad():
-            if batch_idx%10 == 0:
+            log ={}
+            if batch_idx%20 == 0:
+                imgs, proj_mats, depths, masks, init_depth_min, depth_interval = self.decode_batch(batch)
+                target_imgs = batch['target_imgs']
+                imgs = imgs.transpose(1, 2)
+                new_imgs = self.forward(imgs)
+                target_imgs = target_imgs.transpose(1, 2)
+
+
+                results = self.depthmodel(new_imgs.transpose(1, 2), proj_mats, init_depth_min, depth_interval)
+                result_original = self.depthmodel(imgs.transpose(1,2), proj_mats, init_depth_min, depth_interval)
+                loss_original = self.calculate_depthloss(result_original, depths, masks)
+                loss_depth = self.calculate_depthloss(results, depths, masks)
+                content_loss = self.calculate_contentloss(new_imgs, target_imgs)*self.lambda_content
+            
+                self.log('train/content_loss', content_loss, on_step=True, on_epoch=True)
+                self.log('train/depth_loss', loss_depth, on_step=True, on_epoch=True)
+                self.log('train: refined/original', loss_depth/(1e-10 + loss_original), on_step=True, on_epoch=True)
+        
+        
+       
+            
                 try:
                     imgs_new = new_imgs.transpose(1, 2)
-                    img_ = self.unpreprocess(imgs_new[0,0]).cpu() # batch 0, ref image
+                    img_ = self.unpreprocess(imgs_new[0]).cpu() # batch 0, ref image
+                    img_ = rearrange(img_, 'n c h w -> c h (n w)')
                     depth_gt_ = visualize_depth(depths['level_0'][0])
                     depth_pred_ = visualize_depth(results['depth_0'][0]*masks['level_0'][0])
                     prob = visualize_prob(results['confidence_0'][0]*masks['level_0'][0])
                     stack = torch.stack([img_, depth_gt_, depth_pred_, prob]) # (4, 3, H, W)
-                    self.logger.experiment.add_images('train/image_pred_prob',
-                                                    stack, self.global_step)
+                    vutils.save_image(stack, 
+                                      f'/root/autodl-tmp/images/outputs/d3c/train/d3c_pred_net_{self.current_epoch}_{batch_idx}.png')
                     
                     imgs = imgs.transpose(1, 2)
-                    img_ = self.unpreprocess(imgs[0,0]).cpu() # batch 0, ref image
+                    img_ = self.unpreprocess(imgs[0]).cpu() # batch 0, ref image
+                    img_ = rearrange(img_, 'n c h w -> c h (n w)')
                     depth_gt_ = visualize_depth(depths['level_0'][0])
                     depth_pred_ = visualize_depth(result_original['depth_0'][0]*masks['level_0'][0])
                     prob = visualize_prob(result_original['confidence_0'][0]*masks['level_0'][0])
                     stack = torch.stack([img_, depth_gt_, depth_pred_, prob]) # (4, 3, H, W)
-                    self.logger.experiment.add_images('train/image_GT_prob_old',
-                                                    stack, self.global_step)
+                    vutils.save_image(stack, f'/root/autodl-tmp/images/outputs/d3c/train/d3c_ori_net_{self.current_epoch}_{batch_idx}.png')
                     log['error'] =0
-                    imgs_new = rearrange(imgs_new, 'b n c h w -> b c h (n w) ')
-                    self.logger.experiment.add_image('train_output', imgs_new, self.global_step)
+                    
+                    
 
                 except:
                     log['error'] = 1
 
-            depth_pred = results['depth_0']
-            depth_old = result_original['depth_0']
-            depth_gt = depths['level_0']
-            mask = masks['level_0']
-            log['train/abs_err'] = abs_err = abs_error(depth_pred, depth_gt, mask).mean()
-            log['train/acc_1mm'] = acc_threshold(depth_pred, depth_gt, mask, 1).mean()
-            log['train/acc_2mm'] = acc_threshold(depth_pred, depth_gt, mask, 2).mean()
-            log['train/acc_4mm'] = acc_threshold(depth_pred, depth_gt, mask, 4).mean()
-            log['train/abs_err_old'] = abs_error(depth_old, depth_gt, mask).mean()
-            log['train/acc_1mm_old'] = acc_threshold(depth_old, depth_gt, mask, 1).mean()
-            log['train/acc_2mm_old'] = acc_threshold(depth_old, depth_gt, mask, 2).mean()
-            log['train/acc_4mm_old'] = acc_threshold(depth_old, depth_gt, mask, 4).mean()
-            # the ratio of the loss
-            log['train/abs_err_ratio'] = abs_err/(1e-10 + abs_error(depth_old, depth_gt, mask).mean())
-            log['train/acc_1mm_ratio'] = acc_threshold(depth_pred, depth_gt, mask, 1).mean()/(1e-10 + acc_threshold(depth_old, depth_gt, mask, 1).mean())
-            log['train/acc_2mm_ratio'] = acc_threshold(depth_pred, depth_gt, mask, 2).mean()/(1e-10 + acc_threshold(depth_old, depth_gt, mask, 2).mean())
-            log['train/acc_4mm_ratio'] = acc_threshold(depth_pred, depth_gt, mask, 4).mean()/(1e-10 + acc_threshold(depth_old, depth_gt, mask, 4).mean())
-            self.log_dict(log, on_epoch=True, on_step=True)
+                depth_pred = results['depth_0']
+                depth_old = result_original['depth_0']
+                depth_gt = depths['level_0']
+                mask = masks['level_0']
+                log['train/abs_err'] = abs_err = abs_error(depth_pred, depth_gt, mask).mean()
+                log['train/acc_1mm'] = acc_threshold(depth_pred, depth_gt, mask, 1).mean()
+                log['train/acc_2mm'] = acc_threshold(depth_pred, depth_gt, mask, 2).mean()
+                log['train/acc_4mm'] = acc_threshold(depth_pred, depth_gt, mask, 4).mean()
+                log['train/abs_err_old'] = abs_error(depth_old, depth_gt, mask).mean()
+                log['train/acc_1mm_old'] = acc_threshold(depth_old, depth_gt, mask, 1).mean()
+                log['train/acc_2mm_old'] = acc_threshold(depth_old, depth_gt, mask, 2).mean()
+                log['train/acc_4mm_old'] = acc_threshold(depth_old, depth_gt, mask, 4).mean()
+                # the ratio of the loss
+                log['train/abs_err_ratio'] = abs_err/(1e-10 + abs_error(depth_old, depth_gt, mask).mean())
+                log['train/acc_1mm_ratio'] = acc_threshold(depth_pred, depth_gt, mask, 1).mean()/(1e-10 + acc_threshold(depth_old, depth_gt, mask, 1).mean())
+                log['train/acc_2mm_ratio'] = acc_threshold(depth_pred, depth_gt, mask, 2).mean()/(1e-10 + acc_threshold(depth_old, depth_gt, mask, 2).mean())
+                log['train/acc_4mm_ratio'] = acc_threshold(depth_pred, depth_gt, mask, 4).mean()/(1e-10 + acc_threshold(depth_old, depth_gt, mask, 4).mean())
+                self.log_dict(log, on_epoch=True, on_step=True)
         return loss
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
        
         imgs, proj_mats, depths, masks, init_depth_min, depth_interval = self.decode_batch(batch)
+
+        
         imgs = imgs.transpose(1, 2)
+        target_imgs = batch['target_imgs']
+        target_imgs = target_imgs.transpose(1, 2)
         new_imgs = self.forward(imgs)
-        results = self.depthmodel(new_imgs.transpose(1, 2), proj_mats, init_depth_min, depth_interval)
-        result_original = self.depthmodel(imgs.transpose(1,2), proj_mats, init_depth_min, depth_interval)
-        loss_original = self.calculate_depthloss(result_original, depths, masks)
-        loss_depth = self.calculate_depthloss(results, depths, masks)
+        loss = self.l2_loss(new_imgs, target_imgs)
+
+        
+        with torch.no_grad():
+            results = self.depthmodel(new_imgs.transpose(1, 2), proj_mats, init_depth_min, depth_interval)
+            result_original = self.depthmodel(imgs.transpose(1,2), proj_mats, init_depth_min, depth_interval)
+            loss_original = self.calculate_depthloss(result_original, depths, masks)
+            loss_depth = self.calculate_depthloss(results, depths, masks)
 
         new_imgs = new_imgs.transpose(1, 2) # b, n, c, h, w
         imgs = imgs.transpose(1, 2)
@@ -263,12 +291,16 @@ class Net(pl.LightningModule):
                                     ])
             new_img = denormalize(new_imgs[0])
             
-            
+            target_imgs = denormalize(target_imgs[0])
+
+            target_imgs = rearrange(target_imgs, 'n c h w -> c h (n w)')
             new_img= rearrange(new_img, 'n c h w -> c h (n w) ')
-            self.logger.experiment.add_image('val_output', new_img, self.global_step)
+            cat_imgs = torch.stack([target_imgs, new_img])
+            vutils.save_image(cat_imgs, f'/root/autodl-tmp/images/outputs/d3c/val/d3c_net_{self.current_epoch}_{batch_idx}.png',
+                              nrow = 2)
 
         
-        loss = loss_depth
+        
         epochs = self.current_epoch
        
         self.log('val_loss', loss, on_step=True, on_epoch=True)
@@ -328,6 +360,7 @@ class Net(pl.LightningModule):
     @torch.no_grad()
     def test_step(self, batch, batch_idx):
         imgs, proj_mats, depths, masks, init_depth_min, depth_interval = self.decode_batch(batch)
+
         img_views = imgs.shape[1]
         imgs = imgs.transpose(1, 2)
 
@@ -461,7 +494,7 @@ if __name__ == "__main__":
         upscale_factor = 1
         in_channel = 3
         out_channel = 9
-        nf = 64
+        nf = 32
 
    
     
@@ -529,7 +562,7 @@ if __name__ == "__main__":
     logger = TensorBoardLogger('/root/autodl-tmp/logs', name='d3c_net')
     checkpoint_callback = ModelCheckpoint(
         monitor='val_ratio: refined/original',
-        dirpath='/root/autodl-tmp/project/dp_simple/ckpts/',
+        dirpath='/root/autodl-tmp/checkpoints/d3n',
         filename='d3c_net_128_{epoch}',
         save_top_k=1,
         mode='min',
@@ -545,6 +578,7 @@ if __name__ == "__main__":
     trainer = Trainer(max_epochs=200, 
                       gpus=1,
                     strategy='ddp',
+                    
                     callbacks=[checkpoint_callback, 
                                #early_stop_callback
                                ]
@@ -552,7 +586,7 @@ if __name__ == "__main__":
                   
                     val_check_interval=1.0,
                     logger=logger,
-                    resume_from_checkpoint='/root/autodl-tmp/project/dp_simple/ckpts/d3c_net_epoch=54.ckpt'
+                    # resume_from_checkpoint='/root/autodl-tmp/project/dp_simple/ckpts/d3c_net_epoch=54.ckpt'
                     )
     model = CascadeMVSNet(n_depths=[8,32,48],
                         interval_ratios=[1.0,2.0,4.0],
@@ -569,12 +603,12 @@ if __name__ == "__main__":
     trial.num_groups2 = 6
     model = build_model(trial, 100,1, 3,9, model)
 
-    train_dataset = DTUDataset('/root/autodl-tmp/mvs_training/dtu/', 'train', img_wh=(128,128))
+    train_dataset = DTUDataset('/root/autodl-tmp/mvs_training/dtu/', 'val')
     from torch.utils.data import DataLoader
-    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=4)
         
-    val_dataset = DTUDataset('/root/autodl-tmp/mvs_training/dtu/', 'val',img_wh=(128,128))
-    val_loader = DataLoader(val_dataset, batch_size=4, shuffle=True, num_workers=4)
+    val_dataset = DTUDataset('/root/autodl-tmp/mvs_training/dtu/', 'test')
+    val_loader = DataLoader(val_dataset, batch_size=1, shuffle=True, num_workers=4)
 
         
     trainer.fit(model, train_loader, val_loader)

@@ -11,7 +11,7 @@ from torchvision import transforms as T
 
 class DTUDataset(Dataset):
     def __init__(self, root_dir, split, n_views=3, levels=3, depth_interval=2.65,
-                 img_wh=None,abs_error ="abs"):
+                 img_wh=None,abs_error ="abs",output_total=False,threshold = 0.8):
         """
         img_wh should be set to a tuple ex: (1152, 864) to enable test mode!
         """
@@ -23,12 +23,14 @@ class DTUDataset(Dataset):
         if img_wh is not None:
             assert img_wh[0]%32==0 and img_wh[1]%32==0, \
                 'img_wh must both be multiples of 32!'
+        self.threshold = threshold
         self.build_metas()
         self.n_views = n_views
         self.levels = levels # FPN levels
         self.depth_interval = depth_interval
         self.build_proj_mats()
         self.define_transforms()
+        self.output_total = output_total
         
       
         
@@ -44,6 +46,18 @@ class DTUDataset(Dataset):
             self.output_pkl = pickle.load(f)
         # light conditions 0-6 for training
         # light condition 3 for testing (the brightest?)
+        outputs_total = {}
+        for scan in self.output_pkl.keys():
+            scan_index = scan.split('_')[0]
+            if scan_index not in outputs_total:
+                outputs_total[scan_index] = []
+            outputs_total[scan_index].append(self.output_pkl[scan])
+        for scan in outputs_total.keys():
+            outputs_total[scan] = np.mean(np.array(outputs_total[scan]), axis=0)
+            print(f"scan {scan} mean output: {outputs_total[scan]}")
+        self.total_pkl = outputs_total
+
+
         light_idxs = list(range(7))
 
         pair_file = "Cameras/pair.txt"
@@ -57,7 +71,11 @@ class DTUDataset(Dataset):
                     
 
                     for light_idx in light_idxs:
-                        self.metas += [(scan, ref_view,light_idx, src_views)]
+                        output_key = f"{scan}_{ref_view}_{src_views[0]}_{src_views[1]}"
+                        losses = self.output_pkl[output_key]
+                        if min(losses)/losses[light_idx] <self.threshold:
+                            
+                            self.metas += [(scan, ref_view,light_idx, src_views)]
                          
     def build_proj_mats(self):
         proj_mats = []
@@ -181,7 +199,13 @@ class DTUDataset(Dataset):
         view_ids = [ref_view] + src_views[:self.n_views-1]
 
         output_key = f"{scan}_{ref_view}_{src_views[0]}_{src_views[1]}"
-        target_light = self.output_pkl[output_key]
+        if self.total_pkl:
+            target_light = self.total_pkl[scan]
+            target_light = np.argmin(target_light)
+        else:
+            target_light = self.output_pkl[output_key]
+            target_light = np.argmin(target_light)
+
         
 
         sample = {}

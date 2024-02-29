@@ -11,7 +11,7 @@ import math
 
 
 def random_crop(HR, LR, patch_size_lr, scale_factor): # HR: N*H*W
-    _, _, h_hr, w_hr = HR.shape
+    _, _,_, h_hr, w_hr = HR.shape
     h_lr = h_hr // scale_factor
     w_lr = w_hr // scale_factor
     h_start_lr = random.randint(5, h_lr - patch_size_lr - 5)
@@ -24,8 +24,8 @@ def random_crop(HR, LR, patch_size_lr, scale_factor): # HR: N*H*W
     w_start = w_start_lr * scale_factor
     w_end = w_end_lr * scale_factor
 
-    HR = HR[:, :, h_start:h_end, w_start:w_end]
-    LR = LR[:, :, h_start_lr:h_end_lr, w_start_lr:w_end_lr]
+    HR = HR[:, :,:, h_start:h_end, w_start:w_end]
+    LR = LR[:, :,:, h_start_lr:h_end_lr, w_start_lr:w_end_lr]
 
     return HR, LR
 
