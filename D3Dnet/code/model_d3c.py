@@ -1,12 +1,14 @@
 from math import sqrt
 import sys
+import copy
 sys.path.append('/root/autodl-tmp/project/dp_simple/')
 sys.path.append("/root/autodl-tmp/taming-transformers")
+from taming.data.dtu import DTUDataset
 #import ViT
 from torchvision import transforms as T
 from CasMVSNet_pl.models.mvsnet import CascadeMVSNet
 from CasMVSNet_pl.utils import load_ckpt
-from CasMVSNet_pl.datasets.dtu import DTUDataset  
+
 from CasMVSNet_pl.utils import *
 from data_utils import *
 from taming.data.dtu import DTUDataset 
@@ -181,9 +183,16 @@ class Net(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         imgs, proj_mats, depths, masks, init_depth_min, depth_interval = self.decode_batch(batch)
         target_imgs = batch['target_imgs']
-
-        target_imgs,imgs = random_crop(target_imgs,imgs , 128, 1)
         
+        # target_imgs,imgs,masks,depths = random_crop(target_imgs,imgs, 256, 1,masks=copy.deepcopy(masks)
+        #                                             ,depths=copy.deepcopy(depths)
+        #                                             )
+        imgs = rearrange(imgs, 'b n c h w -> b c h (n w)')
+        target_imgs = rearrange(target_imgs, 'b n c h w -> b c h (n w)')
+        imgs = F.interpolate(imgs, scale_factor=0.5, mode='bilinear', align_corners=False)
+        target_imgs = F.interpolate(target_imgs, scale_factor=0.5, mode='bilinear', align_corners=False)
+        imgs = rearrange(imgs, 'b c h (n w) -> b n c h w', n=3)
+        target_imgs = rearrange(target_imgs, 'b c h (n w) -> b n c h w', n=3)
 
         imgs = imgs.transpose(1, 2)
         new_imgs = self.forward(imgs)
@@ -192,6 +201,24 @@ class Net(pl.LightningModule):
         
         target_imgs = target_imgs.transpose(1, 2)
         loss = self.l2_loss(new_imgs, target_imgs)
+
+
+        # imgs = imgs.transpose(1, 2)
+        # new_imgs = new_imgs.transpose(1, 2)
+        # results = self.depthmodel(new_imgs, proj_mats, init_depth_min, depth_interval)
+        # result_original = self.depthmodel(imgs, proj_mats, init_depth_min, depth_interval)
+        # loss_original = self.calculate_depthloss(result_original, depths, masks)
+        # loss_depth = self.calculate_depthloss(results, depths, masks)
+        # depth_loss = loss_depth-loss_original
+        # self.log('train/depth_loss', loss_depth, on_step=True, on_epoch=True)
+        # self.log('train: refined/original', loss_depth/(1e-10 + loss_original), on_step=True, on_epoch=True)
+        # loss = l2_loss + depth_loss
+        
+
+
+
+
+
         self.log("train/loss", loss, on_step=True, on_epoch=True)
         with torch.no_grad():
             log ={}
@@ -223,9 +250,9 @@ class Net(pl.LightningModule):
                     depth_gt_ = visualize_depth(depths['level_0'][0])
                     depth_pred_ = visualize_depth(results['depth_0'][0]*masks['level_0'][0])
                     prob = visualize_prob(results['confidence_0'][0]*masks['level_0'][0])
-                    stack = torch.stack([img_, depth_gt_, depth_pred_, prob]) # (4, 3, H, W)
-                    vutils.save_image(stack, 
-                                      f'/root/autodl-tmp/images/outputs/d3c/train/d3c_pred_net_{self.current_epoch}_{batch_idx}.png')
+                    stack1 = torch.stack([img_, depth_gt_, depth_pred_, prob]) # (4, 3, H, W)
+                    # vutils.save_image(stack, 
+                    #                   f'/root/autodl-tmp/images/outputs/d3c/train/d3c_pred_net_{self.current_epoch}_{batch_idx}.png')
                     
                     imgs = imgs.transpose(1, 2)
                     img_ = self.unpreprocess(imgs[0]).cpu() # batch 0, ref image
@@ -233,8 +260,10 @@ class Net(pl.LightningModule):
                     depth_gt_ = visualize_depth(depths['level_0'][0])
                     depth_pred_ = visualize_depth(result_original['depth_0'][0]*masks['level_0'][0])
                     prob = visualize_prob(result_original['confidence_0'][0]*masks['level_0'][0])
-                    stack = torch.stack([img_, depth_gt_, depth_pred_, prob]) # (4, 3, H, W)
-                    vutils.save_image(stack, f'/root/autodl-tmp/images/outputs/d3c/train/d3c_ori_net_{self.current_epoch}_{batch_idx}.png')
+                    stack2 = torch.stack([img_, depth_gt_, depth_pred_, prob]) # (4, 3, H, W)
+                    stack = torch.cat([stack1, stack2], dim=0)
+                    vutils.save_image(stack, f'/root/autodl-tmp/images/outputs/d3c/train/d3c_ori_net_{self.current_epoch}_{batch_idx}.png'
+                                      ,nrow = 4)
                     log['error'] =0
                     
                     
@@ -603,11 +632,11 @@ if __name__ == "__main__":
     trial.num_groups2 = 6
     model = build_model(trial, 100,1, 3,9, model)
 
-    train_dataset = DTUDataset('/root/autodl-tmp/mvs_training/dtu/', 'val')
+    train_dataset = DTUDataset('/root/autodl-tmp/mvs_training/dtu/', 'train')
     from torch.utils.data import DataLoader
     train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=4)
         
-    val_dataset = DTUDataset('/root/autodl-tmp/mvs_training/dtu/', 'test')
+    val_dataset = DTUDataset('/root/autodl-tmp/mvs_training/dtu/', 'val')
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=True, num_workers=4)
 
         

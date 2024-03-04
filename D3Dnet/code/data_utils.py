@@ -9,15 +9,40 @@ import os
 import math
 # import cv2
 
-
-def random_crop(HR, LR, patch_size_lr, scale_factor): # HR: N*H*W
+def random_crop(HR, LR, patch_size_lr, scale_factor,masks=None,depths=None): # HR: N*H*W
     _, _,_, h_hr, w_hr = HR.shape
     h_lr = h_hr // scale_factor
     w_lr = w_hr // scale_factor
-    h_start_lr = random.randint(5, h_lr - patch_size_lr - 5)
-    h_end_lr = h_start_lr + patch_size_lr
-    w_start_lr = random.randint(5, w_lr - patch_size_lr - 5)
-    w_end_lr = w_start_lr + patch_size_lr
+
+    # obtain h and w from mask
+    mask = masks['level_0'].cpu().numpy()
+
+    
+    for i in range(len(mask)):
+        mask_i = mask[i]
+        y_indices, x_indices = np.where(mask_i)
+        x_min, x_max = np.min(x_indices), np.max(x_indices)
+        y_min, y_max = np.min(y_indices), np.max(y_indices)
+
+    x_min, x_max = np.min(x_indices), np.max(x_indices)
+    y_min, y_max = np.min(y_indices), np.max(y_indices)
+    if x_max - x_min < patch_size_lr:
+        h_start_lr = x_min
+        h_end_lr = x_max
+    else:
+        h_start_lr = random.randint(x_min, x_max - patch_size_lr)
+        h_end_lr = h_start_lr + patch_size_lr
+    if y_max - y_min < patch_size_lr:
+        w_start_lr = y_min
+        w_end_lr = y_max
+    
+
+    # h_start_lr = random.randint(5, h_lr - patch_size_lr - 5)
+    # w_start_lr = random.randint(5, w_lr - patch_size_lr - 5)
+    else:
+       
+        w_start_lr = random.randint(y_min, y_max - patch_size_lr)
+        w_end_lr = w_start_lr + patch_size_lr
 
     h_start = h_start_lr * scale_factor
     h_end = h_end_lr * scale_factor
@@ -26,8 +51,25 @@ def random_crop(HR, LR, patch_size_lr, scale_factor): # HR: N*H*W
 
     HR = HR[:, :,:, h_start:h_end, w_start:w_end]
     LR = LR[:, :,:, h_start_lr:h_end_lr, w_start_lr:w_end_lr]
+    
+    if depths is not None:
+       for i in range(len(depths)):
+            level_key = 'level_{}'.format(i)
+            mask_level = masks[level_key]
+            depth_level = depths[level_key]
 
-    return HR, LR
+            
+            depths[level_key] = depth_level[:, h_start:h_end, w_start:w_end]
+            masks[level_key] = mask_level[:, h_start:h_end, w_start:w_end]
+            
+            h_start =h_start //  2
+            h_end = h_end// 2 
+            w_start = w_start // 2
+            w_end = w_end// 2
+            
+            
+
+    return HR, LR, masks, depths
 
 def add_noise(img, n_std):
     return img + np.random.normal(0, n_std, img.shape)
