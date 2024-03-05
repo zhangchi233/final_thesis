@@ -72,6 +72,7 @@ class TrainVQGAN:
         val_dataset = load_data(args)
         steps_per_epoch = len(train_dataset)
         for epoch in range(args.epochs):
+            depth_loss_ratio = []
             with tqdm(range(len(train_dataset))) as pbar:
                 for i, batch in zip(pbar, train_dataset):
                     imgs, proj_mats, depths, masks, init_depth_min, depth_interval = decode_batch(batch)
@@ -97,25 +98,30 @@ class TrainVQGAN:
                     disc_fake = self.discriminator(decoded_images.to(imgs.device))
 
                     disc_factor = self.vqgan.adopt_weight(args.disc_factor, epoch*steps_per_epoch+i, threshold=args.disc_start)
-
-                    perceptual_loss = self.perceptual_loss(target_imgs, decoded_images)
                     rec_loss = torch.abs(target_imgs - decoded_images)
-                    with torch.no_grad():
-                       
-                        depth_loss,loss_original,log = self.depth_loss(decoded_images.to(imgs.device), \
+                    depth_loss,loss_original,log = self.depth_loss(decoded_images.to(imgs.device), \
                         imgs, proj_mats, depths, masks, init_depth_min, depth_interval)
-                        self.logger.add_scalar('train/Depth_Loss', depth_loss, epoch*steps_per_epoch+i)
-                        self.logger.add_scalar('train/Loss_Original', loss_original, epoch*steps_per_epoch+i)
-                        # # ration depth_loss and loss_original
-                        self.logger.add_scalar('train/Ratio', depth_loss/loss_original, epoch*steps_per_epoch+i)
-                        # Assuming `log` is your dictionary of values
-                        for key, value in log.items():
-                            self.logger.add_scalar(f'train/log/{key}', value, epoch*steps_per_epoch+i)
+                    
+                    # perceptual_loss = self.perceptual_loss(target_imgs, decoded_images)
+                    dep_loss = depth_loss- loss_original
+                    depth_loss_ratio.append(dep_loss/loss_original)
+                    pbar.set_postfix_str(f"Depth Loss Ratio: {np.mean(depth_loss_ratio)}")
+                    # with torch.no_grad():
+                       
+                    #     depth_loss,loss_original,log = self.depth_loss(decoded_images.to(imgs.device), \
+                    #     imgs, proj_mats, depths, masks, init_depth_min, depth_interval)
+                    #     self.logger.add_scalar('train/Depth_Loss', depth_loss, epoch*steps_per_epoch+i)
+                    #     self.logger.add_scalar('train/Loss_Original', loss_original, epoch*steps_per_epoch+i)
+                    #     # # ration depth_loss and loss_original
+                    #     self.logger.add_scalar('train/Ratio', depth_loss/loss_original, epoch*steps_per_epoch+i)
+                    #     # Assuming `log` is your dictionary of values
+                    #     for key, value in log.items():
+                    #         self.logger.add_scalar(f'train/log/{key}', value, epoch*steps_per_epoch+i)
 
                         
 
-                    perceptual_rec_loss = args.perceptual_loss_factor * perceptual_loss + \
-                                            args.rec_loss_factor * rec_loss
+                    perceptual_rec_loss =  args.rec_loss_factor * rec_loss #args.perceptual_loss_factor * perceptual_loss + \
+                                            
                   
                     perceptual_rec_loss = perceptual_rec_loss.mean()
                     g_loss = -torch.mean(disc_fake).to(perceptual_rec_loss.device)
