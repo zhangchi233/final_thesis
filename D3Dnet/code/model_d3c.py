@@ -187,20 +187,20 @@ class Net(pl.LightningModule):
         # target_imgs,imgs,masks,depths = random_crop(target_imgs,imgs, 256, 1,masks=copy.deepcopy(masks)
         #                                             ,depths=copy.deepcopy(depths)
         #                                             )
-        imgs = rearrange(imgs, 'b n c h w -> b c h (n w)')
-        target_imgs = rearrange(target_imgs, 'b n c h w -> b c h (n w)')
-        imgs = F.interpolate(imgs, scale_factor=0.5, mode='bilinear', align_corners=False)
-        target_imgs = F.interpolate(target_imgs, scale_factor=0.5, mode='bilinear', align_corners=False)
-        imgs = rearrange(imgs, 'b c h (n w) -> b n c h w', n=3)
-        target_imgs = rearrange(target_imgs, 'b c h (n w) -> b n c h w', n=3)
+        # imgs = rearrange(imgs, 'b n c h w -> b c h (n w)')
+        # target_imgs = rearrange(target_imgs, 'b n c h w -> b c h (n w)')
+        # imgs = F.interpolate(imgs, scale_factor=0.5, mode='bilinear', align_corners=False)
+        # target_imgs = F.interpolate(target_imgs, scale_factor=0.5, mode='bilinear', align_corners=False)
+        # imgs = rearrange(imgs, 'b c h (n w) -> b n c h w', n=3)
+        # target_imgs = rearrange(target_imgs, 'b c h (n w) -> b n c h w', n=3)
 
         imgs = imgs.transpose(1, 2)
         new_imgs = self.forward(imgs)
         
 
         
-        target_imgs = target_imgs.transpose(1, 2)
-        loss = self.l2_loss(new_imgs, target_imgs)
+        # target_imgs = target_imgs.transpose(1, 2)
+        #loss = self.l2_loss(new_imgs, target_imgs)
 
 
         # imgs = imgs.transpose(1, 2)
