@@ -109,7 +109,7 @@ class Net(pl.LightningModule):
             nn.Conv3d(in_channels=in_channel, out_channels=nf, kernel_size=3, stride=1, padding=1, bias=False),
             nn.LeakyReLU(negative_slope=0.1, inplace=True)
         )
-        self.vgg = VGG16()
+        #self.vgg = VGG16()
         self.residual_layer = self.make_layer(functools.partial(ResBlock_3d, nf,dropout = 0.1), configs.num_groups1)
         self.TA = nn.Conv2d(3 * nf, nf, 1, 1, bias=True)
         ### reconstruct
@@ -203,16 +203,16 @@ class Net(pl.LightningModule):
         #loss = self.l2_loss(new_imgs, target_imgs)
 
 
-        # imgs = imgs.transpose(1, 2)
-        # new_imgs = new_imgs.transpose(1, 2)
-        # results = self.depthmodel(new_imgs, proj_mats, init_depth_min, depth_interval)
-        # result_original = self.depthmodel(imgs, proj_mats, init_depth_min, depth_interval)
-        # loss_original = self.calculate_depthloss(result_original, depths, masks)
-        # loss_depth = self.calculate_depthloss(results, depths, masks)
-        # depth_loss = loss_depth-loss_original
-        # self.log('train/depth_loss', loss_depth, on_step=True, on_epoch=True)
-        # self.log('train: refined/original', loss_depth/(1e-10 + loss_original), on_step=True, on_epoch=True)
-        # loss = l2_loss + depth_loss
+        imgs = imgs.transpose(1, 2)
+        new_imgs = new_imgs.transpose(1, 2)
+        results = self.depthmodel(new_imgs, proj_mats, init_depth_min, depth_interval)
+        result_original = self.depthmodel(imgs, proj_mats, init_depth_min, depth_interval)
+        loss_original = self.calculate_depthloss(result_original, depths, masks)
+        loss_depth = self.calculate_depthloss(results, depths, masks)
+        depth_loss = loss_depth-loss_original
+        self.log('train/depth_loss', loss_depth, on_step=True, on_epoch=True)
+        self.log('train: refined/original', loss_depth/(1e-10 + loss_original), on_step=True, on_epoch=True)
+        loss = depth_loss
         
 
 
@@ -232,13 +232,13 @@ class Net(pl.LightningModule):
 
                 results = self.depthmodel(new_imgs.transpose(1, 2), proj_mats, init_depth_min, depth_interval)
                 result_original = self.depthmodel(imgs.transpose(1,2), proj_mats, init_depth_min, depth_interval)
-                loss_original = self.calculate_depthloss(result_original, depths, masks)
-                loss_depth = self.calculate_depthloss(results, depths, masks)
-                content_loss = self.calculate_contentloss(new_imgs, target_imgs)*self.lambda_content
+                # loss_original = self.calculate_depthloss(result_original, depths, masks)
+                # loss_depth = self.calculate_depthloss(results, depths, masks)
+                #content_loss = self.calculate_contentloss(new_imgs, target_imgs)*self.lambda_content
             
-                self.log('train/content_loss', content_loss, on_step=True, on_epoch=True)
-                self.log('train/depth_loss', loss_depth, on_step=True, on_epoch=True)
-                self.log('train: refined/original', loss_depth/(1e-10 + loss_original), on_step=True, on_epoch=True)
+                # self.log('train/content_loss', content_loss, on_step=True, on_epoch=True)
+                # self.log('train/depth_loss', loss_depth, on_step=True, on_epoch=True)
+                # self.log('train: refined/original', loss_depth/(1e-10 + loss_original), on_step=True, on_epoch=True)
         
         
        
@@ -262,7 +262,7 @@ class Net(pl.LightningModule):
                     prob = visualize_prob(result_original['confidence_0'][0]*masks['level_0'][0])
                     stack2 = torch.stack([img_, depth_gt_, depth_pred_, prob]) # (4, 3, H, W)
                     stack = torch.cat([stack1, stack2], dim=0)
-                    vutils.save_image(stack, f'/root/autodl-tmp/images/outputs/d3c/train/d3c_ori_net_{self.current_epoch}_{batch_idx}.png'
+                    vutils.save_image(stack, f'/root/autodl-tmp/images/d3c/train/d3c_ori_net_{self.current_epoch}_{batch_idx}.png'
                                       ,nrow = 4)
                     log['error'] =0
                     
@@ -300,24 +300,31 @@ class Net(pl.LightningModule):
         target_imgs = batch['target_imgs']
         target_imgs = target_imgs.transpose(1, 2)
         new_imgs = self.forward(imgs)
-        loss = self.l2_loss(new_imgs, target_imgs)
+       
 
         
-        with torch.no_grad():
-            results = self.depthmodel(new_imgs.transpose(1, 2), proj_mats, init_depth_min, depth_interval)
-            result_original = self.depthmodel(imgs.transpose(1,2), proj_mats, init_depth_min, depth_interval)
-            loss_original = self.calculate_depthloss(result_original, depths, masks)
-            loss_depth = self.calculate_depthloss(results, depths, masks)
+        
+        results = self.depthmodel(new_imgs.transpose(1, 2), proj_mats, init_depth_min, depth_interval)
+        result_original = self.depthmodel(imgs.transpose(1,2), proj_mats, init_depth_min, depth_interval)
+        loss_original = self.calculate_depthloss(result_original, depths, masks)
+        loss_depth = self.calculate_depthloss(results, depths, masks)
+        loss = loss_depth-loss_original
+        
 
-        new_imgs = new_imgs.transpose(1, 2) # b, n, c, h, w
-        imgs = imgs.transpose(1, 2)
-        if batch_idx%100 == 0:
+        epochs = self.current_epoch
+       
+        self.log('val_loss', loss, on_step=True, on_epoch=True)
+        self.log('val_depth_loss', loss_depth, on_step=True, on_epoch=True)
+        self.log('val_ratio: refined/original', loss_depth/(1e-10 + loss_original), on_step=True, on_epoch=True)
+        if batch_idx%50 == 0:
 
             denormalize = T.Compose([T.Normalize(mean=[0., 0., 0.],
                                                 std=[1/0.229, 1/0.224, 1/0.225]),
                                     T.Normalize(mean=[-0.485, -0.456, -0.406],
                                                 std=[1., 1., 1.]),
                                     ])
+            new_imgs = new_imgs.transpose(1, 2) # b, n, c, h, w
+            imgs = imgs.transpose(1, 2)
             new_img = denormalize(new_imgs[0])
             
             target_imgs = denormalize(target_imgs[0])
@@ -325,16 +332,12 @@ class Net(pl.LightningModule):
             target_imgs = rearrange(target_imgs, 'n c h w -> c h (n w)')
             new_img= rearrange(new_img, 'n c h w -> c h (n w) ')
             cat_imgs = torch.stack([target_imgs, new_img])
-            vutils.save_image(cat_imgs, f'/root/autodl-tmp/images/outputs/d3c/val/d3c_net_{self.current_epoch}_{batch_idx}.png',
+            vutils.save_image(cat_imgs, f'/root/autodl-tmp/images/d3c/val/d3c_net_{self.current_epoch}_{batch_idx}.png',
                               nrow = 2)
 
         
         
-        epochs = self.current_epoch
-       
-        self.log('val_loss', loss, on_step=True, on_epoch=True)
-        self.log('val_depth_loss', loss_depth, on_step=True, on_epoch=True)
-        self.log('val_ratio: refined/original', loss_depth/(1e-10 + loss_original), on_step=True, on_epoch=True)
+        
         
         log= {}
         with torch.no_grad():
@@ -485,14 +488,21 @@ class Net(pl.LightningModule):
         return content_loss
     
 
-
+from deformable_3d import DeformConvPack_d_lora
 class ResBlock_3d(nn.Module):
     def __init__(self, nf,dropout = 0.1):
         super(ResBlock_3d, self).__init__()
-        self.dcn0 = DeformConvPack_d(nf, nf, kernel_size=3, stride=1, padding=1, dimension='HW')
-        self.dcn1 = DeformConvPack_d(nf, nf, kernel_size=3, stride=1, padding=1, dimension='HW')
+        self.dcn0 = DeformConvPack_d_lora(nf, nf, kernel_size=3, stride=1, padding=1, dimension='HW',
+        r=8,lora_alpha=1, lora_dropout=0.1, merge_weights=True)
+        self.dcn1 = DeformConvPack_d_lora(nf, nf, kernel_size=3, stride=1, padding=1, dimension='HW',
+        r=8,lora_alpha=1, lora_dropout=0.1, merge_weights=True)
         self.lrelu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
         self.dropout = nn.Dropout(dropout)
+    def train(self, mode=True):
+        super().train(mode)
+        self.dcn0.train(mode)
+        self.dcn1.train(mode)
+        
     def forward(self, x):
         return self.dropout(self.dcn1(self.lrelu(self.dcn0(x)))) + x
 
@@ -507,8 +517,14 @@ class ResBlock(nn.Module):
     def forward(self, x):
         
         return self.dropout(self.dcn1(self.lrelu(self.dcn0(x)))) + x
-
-    
+from pytorch_lightning.callbacks import Callback
+class callback(Callback ):
+    def on_train_start(self, trainer, pl_module):
+        # call model.train()
+        pl_module.train()
+    def on_train_end(self, trainer, pl_module):
+        # call model.eval()
+        pl_module.train(False)
 
 
 if __name__ == "__main__":
@@ -550,6 +566,7 @@ if __name__ == "__main__":
     
 
     import optuna
+
     
     def build_model(trial,
                      lambda_content, upscale_factor,
@@ -598,6 +615,7 @@ if __name__ == "__main__":
         save_last=True
 
         )
+    
     early_stop_callback = EarlyStopping(
             monitor='val_ratio: refined/original',
             patience=10,
@@ -626,12 +644,13 @@ if __name__ == "__main__":
 
 
     trial = namedtuple('trial', ['nf', 'lr', 'num_groups1', 'num_groups2'])
-    trial.nf = 64
+    trial.nf = 16
     trial.lr = 1e-4
     trial.num_groups1 = 5
     trial.num_groups2 = 6
     model = build_model(trial, 100,1, 3,9, model)
-
+    
+    model.train(True)
     train_dataset = DTUDataset('/root/autodl-tmp/mvs_training/dtu/', 'train')
     from torch.utils.data import DataLoader
     train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=4)

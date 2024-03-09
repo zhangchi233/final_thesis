@@ -1,0 +1,53 @@
+
+## resource
+#  指使用什么算力容器，通过命令 bayes gear resource 可以看到支持的算力类型
+#
+resource: cpu
+
+train:
+  lr: 0.0001
+  max_epochs: 1000
+model:
+  Trainable: True
+  model_type: pano_generation_outpaint
+  guidance_scale: 0.9
+  model_id: Intel/ldm3d-pano #"/root/autodl-tmp/inpaiting_model"
+  single_image_ft: False
+  diff_timestep: 50
+# setting of pytorch_lightning trainer  
+  begin_steps : 150
+  unet_folder: unet
+  tokenizer_folder: tokenizer
+  scheduler_folder: scheduler
+  text_folder: text_encoder
+  vae_folder: vae
+  guidance_scale: 0.56
+Trainer:
+  trainer:
+    gpus: 1
+    precision: 16
+    log_every_n_steps: 1
+    #check_val_every_n_epoch: 1
+    val_check_interval: 1.0
+    default_root_dir: "/root/autodl-tmp/checkpoints"
+    strategy: "ddp"
+  
+    
+  logger:
+    save_dir: "/root/tf-logs"
+    name: "ldm3d"
+  checkpoint:
+   
+    monitor: "val_loss"
+    dirpath: "/root/autodl-tmp/checkpoints"
+    filename: "ldm_3d"
+    save_top_k: 1
+    mode: "min"
+    
+
+
+
+
+
+
+  

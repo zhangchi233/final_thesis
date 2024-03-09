@@ -17,8 +17,6 @@ from data.dtu import DTUDataset
 from modules.unClip import ReprogrammingLayer
 sys.path.append("/root/autodl-tmp/project/framwork/ldm")
 from denoise.denoise import denoiseModel
-from peft import LoraConfig
-
 class PanoOutpaintGenerator(pl.LightningModule):
     def __init__(self, config):
         super().__init__()
@@ -31,15 +29,10 @@ class PanoOutpaintGenerator(pl.LightningModule):
         self.views = [0,1,2]
 
 
-        unet_lora_config = LoraConfig(
-        r=config["lora"]["rank"],
-        lora_alpha=config["lora"]["rank"],
-        init_lora_weights="gaussian",
-        target_modules=["to_k", "to_q", "to_v", "to_out.0"],
-        )
+
         self.vae, self.scheduler, unet = self.load_model(
             config['model']['model_id'])
-
+        
 
 
      
@@ -66,18 +59,18 @@ class PanoOutpaintGenerator(pl.LightningModule):
         
     def forward(self, latents, timestep):
         return self.model(latents, timestep)
-    def load_model(self, model_id):
+    def load_model(self, config):
         vae = VQModel.from_pretrained(
             #"/root/autodl-tmp/inpaiting_model/vae"
-            model_id, subfolder="vqvae",
+            config['model']['model_id'], subfolder=config['model']['vae_subfolder'],
             )
         vae.eval()
         scheduler = DDIMScheduler.from_pretrained(
             #"/root/autodl-tmp/inpaiting_model/scheduler")
-            model_id, subfolder="scheduler")
+            config['model']['model_id'], subfolder=config['model']['scheduler_subfolder'],)
         unet = UNet2DModel.from_pretrained(
             #"/root/autodl-tmp/inpaiting_model/unet"
-            model_id, subfolder="unet"
+            config['model']['model_id'], subfolder=config['model']['unet_subfolder'],
             )
         return vae, scheduler, unet
 
@@ -140,16 +133,19 @@ class PanoOutpaintGenerator(pl.LightningModule):
 
         
        
-       
+        meta = {
+           
+            "mask": batch['mask'],
+           
+        }
 
         images=batch['imgs']
         blur_images = batch['dark_imgs'] # input, blur image, condition mask
-        condition_latents = batch['condition']
        
         #images=rearrange(images, 'bs m h w c -> bs m c h w')
         #blur_images=rearrange(blur_images, 'bs m c h w -> bs m c h w')
 
-        images = images
+        images = images[:,0]
         blur_images = blur_images[:,self.views]
         
        
@@ -160,7 +156,7 @@ class PanoOutpaintGenerator(pl.LightningModule):
         
         latents = self.encode_image(images, self.vae)
         
-       
+        blur_images= rearrange(blur_images, 'bs m c h w -> bs (m c) h w')
         
         blur_images = torch.nn.functional.interpolate(blur_images, size=(
                                                                          128, 128),
@@ -181,7 +177,7 @@ class PanoOutpaintGenerator(pl.LightningModule):
         # the input should be latents_input,
         latents_input = torch.cat([noise_z,blur_images ], dim=1)
         latents_input = self.scheduler.scale_model_input(latents_input, t)
-        denoise = self.forward(latents_input, t,condition_latents)
+        denoise = self.forward(latents_input, t)
         target = noise
         target = target.to(torch.float32)
         denoise = denoise.to(torch.float32)
@@ -216,7 +212,7 @@ class PanoOutpaintGenerator(pl.LightningModule):
         #                  * 255).cpu()
         
         mask = batch["mask"]
-        gt_imgs = batch["imgs"].permute(0,2,3,1).cpu().numpy()
+        gt_imgs = batch["imgs"][:,0].permute(0,2,3,1).cpu().numpy()
         gt_imgs = gt_imgs/2+0.5
         dark_imgs = batch["dark_imgs"]/2+0.5
         dark_imgs = rearrange(dark_imgs, 'bs m c h w -> bs c h (m w)')
@@ -248,25 +244,28 @@ class PanoOutpaintGenerator(pl.LightningModule):
        
         images = batch['dark_imgs'][:,self.views]
       
-        condition_latents = batch['condition']
+        mask = batch["mask"]
 
-        bs, c,h, w = images.shape
+        bs, m, c,h, w = images.shape
         device = images.device
         latents_shape = (bs, c, h//4, w//4)
         self.scheduler.set_timesteps(self.diff_timestep, device=device)
         timesteps = self.scheduler.timesteps
-        
+        images = rearrange(images, 'bs m c h w -> bs (m c) h w')
+
         images = torch.nn.functional.interpolate(images,
                                                  size = (128, 128),
                                                     mode='bilinear', align_corners=False)
         
+
+
         latents = torch.randn(latents_shape, device=device)
         
         for i, t in enumerate(timesteps):
             _timestep = torch.cat([t[None, None]], dim=1)
             latent_model_input = torch.cat([latents,images], dim=1)
             latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
-            noise_pred = self.forward(latent_model_input,t,condition_latents)
+            noise_pred = self.forward(latent_model_input,t)
             
             latents = self.scheduler.step(
                 noise_pred, t, latents,eta = 1).prev_sample
