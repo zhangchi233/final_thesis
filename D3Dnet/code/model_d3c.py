@@ -1,8 +1,10 @@
 from math import sqrt
 import sys
 import copy
-sys.path.append('/root/autodl-tmp/project/dp_simple/')
-sys.path.append("/root/autodl-tmp/taming-transformers")
+
+ROOT_DIR ="workspace"
+sys.path.append(f'/{ROOT_DIR}/project/dp_simple/')
+sys.path.append(f"/{ROOT_DIR}/taming-transformers")
 from taming.data.dtu import DTUDataset
 #import ViT
 from torchvision import transforms as T
@@ -18,7 +20,7 @@ from torchvision import utils as vutils
 import pytorch_ssim
 import pytorch_lightning as pl
 
-sys.path.append('/root/autodl-tmp/D3Dnet/code')
+sys.path.append(f'/{ROOT_DIR}/D3Dnet/code')
 import matplotlib.pyplot as plt
 from dcn.modules.deform_conv import *
 import functools
@@ -210,8 +212,18 @@ class Net(pl.LightningModule):
         loss_original = self.calculate_depthloss(result_original, depths, masks)
         loss_depth = self.calculate_depthloss(results, depths, masks)
         depth_loss = loss_depth-loss_original
-        self.log('train/depth_loss', loss_depth, on_step=True, on_epoch=True)
-        self.log('train: refined/original', loss_depth/(1e-10 + loss_original), on_step=True, on_epoch=True)
+        log_dict = {}
+        log_dict['train/depth_loss'] = round(loss_depth,4)
+        log_dict['train/original_loss'] = round(loss_original,4)
+        log_dict['train/depth_loss_ratio'] = rount(loss_depth/(1e-10 + loss_original),4)
+
+
+        
+
+        self.log_dict(log_dict, on_epoch=True, on_step=True, prog_bar=True)
+
+        #self.log('train/depth_loss', loss_depth, on_step=True, on_epoch=True)
+        #self.log('train: refined/original', loss_depth/(1e-10 + loss_original), on_step=True, on_epoch=True, prog_bar=True)
         loss = depth_loss
         
 
@@ -262,7 +274,7 @@ class Net(pl.LightningModule):
                     prob = visualize_prob(result_original['confidence_0'][0]*masks['level_0'][0])
                     stack2 = torch.stack([img_, depth_gt_, depth_pred_, prob]) # (4, 3, H, W)
                     stack = torch.cat([stack1, stack2], dim=0)
-                    vutils.save_image(stack, f'/root/autodl-tmp/images/d3c/train/d3c_ori_net_{self.current_epoch}_{batch_idx}.png'
+                    vutils.save_image(stack, f'/{ROOT_DIR}/images/d3c/train/d3c_ori_net_{self.current_epoch}_{batch_idx}.png'
                                       ,nrow = 4)
                     log['error'] =0
                     
@@ -313,9 +325,16 @@ class Net(pl.LightningModule):
 
         epochs = self.current_epoch
        
-        self.log('val_loss', loss, on_step=True, on_epoch=True)
-        self.log('val_depth_loss', loss_depth, on_step=True, on_epoch=True)
-        self.log('val_ratio: refined/original', loss_depth/(1e-10 + loss_original), on_step=True, on_epoch=True)
+        # self.log('val_loss', loss, on_step=True, on_epoch=True)
+        # self.log('val_depth_loss', loss_depth, on_step=True, on_epoch=True)
+        # self.log('val_ratio: refined/original', loss_depth/(1e-10 + loss_original), on_step=True, on_epoch=True)
+        log_dict = {}
+        log_dict['val/depth_loss'] = round(loss_depth, 4)
+        log_dict['val/original_loss'] = round(loss_original, 4)
+        log_dict['val/depth_loss_ratio'] = loss_depth/(1e-10 + loss_original)
+        log_dict["val/depth_loss_ratio"] = round(log_dict["val/depth_loss_ratio"], 4)
+        self.log_dict(log_dict, on_epoch=True, on_step=True, prog_bar=True)
+        
         if batch_idx%50 == 0:
 
             denormalize = T.Compose([T.Normalize(mean=[0., 0., 0.],
@@ -332,7 +351,7 @@ class Net(pl.LightningModule):
             target_imgs = rearrange(target_imgs, 'n c h w -> c h (n w)')
             new_img= rearrange(new_img, 'n c h w -> c h (n w) ')
             cat_imgs = torch.stack([target_imgs, new_img])
-            vutils.save_image(cat_imgs, f'/root/autodl-tmp/images/d3c/val/d3c_net_{self.current_epoch}_{batch_idx}.png',
+            vutils.save_image(cat_imgs, f'/{ROOT_DIR}/images/d3c/val/d3c_net_{self.current_epoch}_{batch_idx}.png',
                               nrow = 2)
 
         
@@ -551,7 +570,7 @@ if __name__ == "__main__":
     from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping, LearningRateMonitor
     checkpoint_callback = ModelCheckpoint(
         monitor='val_loss',
-        dirpath='/root/autodl-tmp/ckpts/',
+        dirpath=f'/{ROOT_DIR}/ckpts/',
         filename='d3c_net_{epoch}',
         save_top_k=1,
         mode='min',
@@ -605,10 +624,10 @@ if __name__ == "__main__":
         
     from pytorch_lightning.loggers import TensorBoardLogger
    
-    logger = TensorBoardLogger('/root/autodl-tmp/logs', name='d3c_net')
+    logger = TensorBoardLogger(f'/{ROOT_DIR}/logs', name='d3c_net')
     checkpoint_callback = ModelCheckpoint(
         monitor='val_ratio: refined/original',
-        dirpath='/root/autodl-tmp/checkpoints/d3n',
+        dirpath=f'/{ROOT_DIR}/checkpoints/d3n',
         filename='d3c_net_128_{epoch}',
         save_top_k=1,
         mode='min',
@@ -640,22 +659,22 @@ if __name__ == "__main__":
                         num_groups=1,
                         
                         norm_act=ABN).cuda()
-    load_ckpt(model, '/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/ckpts/_ckpt_epoch_10.ckpt')
+    load_ckpt(model,f'/{ROOT_DIR}/project/dp_simple/CasMVSNet_pl/ckpts/_ckpt_epoch_10.ckpt')
 
 
     trial = namedtuple('trial', ['nf', 'lr', 'num_groups1', 'num_groups2'])
-    trial.nf = 16
+    trial.nf = 32
     trial.lr = 1e-4
-    trial.num_groups1 = 5
-    trial.num_groups2 = 6
+    trial.num_groups1 = 1
+    trial.num_groups2 = 2
     model = build_model(trial, 100,1, 3,9, model)
     
     model.train(True)
-    train_dataset = DTUDataset('/root/autodl-tmp/mvs_training/dtu/', 'train')
+    train_dataset = DTUDataset(f'/{ROOT_DIR}/mvs_training/dtu/', 'train')
     from torch.utils.data import DataLoader
     train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=4)
         
-    val_dataset = DTUDataset('/root/autodl-tmp/mvs_training/dtu/', 'val')
+    val_dataset = DTUDataset(f'/{ROOT_DIR}/mvs_training/dtu/', 'val')
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=True, num_workers=4)
 
         
