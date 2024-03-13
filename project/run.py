@@ -9,7 +9,9 @@ from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint, Callback
 import sys
 
 sys.path.append("/root/autodl-tmp/project")
-from data.dtu import DTUDataset
+sys.path.append("/root/autodl-tmp/taming-transformers")
+from framework.lora.dataset.dtu import DTUDataset
+
 #from framwork.inpainting.lighting_uncliponly import PanoOutpaintGenerator
 from framwork.ldm.lightning_ldm import PanoOutpaintGenerator 
 
@@ -44,7 +46,7 @@ if __name__ == "__main__":
     import torch
     data_train = DTUDataset(root_dir="/root/autodl-fs/dtu2/",
                       split="train",
-                      img_wh=(512, 512),
+                     
                       # train_test=True,
                       
                       )

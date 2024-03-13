@@ -212,6 +212,7 @@ class Net(pl.LightningModule):
         loss_original = self.calculate_depthloss(result_original, depths, masks)
         loss_depth = self.calculate_depthloss(results, depths, masks)
         depth_loss = loss_depth-loss_original
+<<<<<<< Updated upstream
         log_dict = {}
         log_dict['train/depth_loss'] = round(loss_depth,4)
         log_dict['train/original_loss'] = round(loss_original,4)
@@ -225,13 +226,19 @@ class Net(pl.LightningModule):
         #self.log('train/depth_loss', loss_depth, on_step=True, on_epoch=True)
         #self.log('train: refined/original', loss_depth/(1e-10 + loss_original), on_step=True, on_epoch=True, prog_bar=True)
         loss = depth_loss
+=======
+        self.log('train/depth_loss', loss_depth, on_step=True, on_epoch=True)
+        self.log('train: refined/original', loss_depth/(1e-10 + loss_original),prog_bar=True, on_step=True, on_epoch=True)
+        loss = loss_depth-loss_original
+        self.log("train/loss", loss, on_step=True, on_epoch=True)
+>>>>>>> Stashed changes
         
 
 
 
 
 
-        self.log("train/loss", loss, on_step=True, on_epoch=True)
+        
         with torch.no_grad():
             log ={}
             if batch_idx%20 == 0:
@@ -255,6 +262,7 @@ class Net(pl.LightningModule):
         
        
             
+<<<<<<< Updated upstream
                 try:
                     imgs_new = new_imgs.transpose(1, 2)
                     img_ = self.unpreprocess(imgs_new[0]).cpu() # batch 0, ref image
@@ -278,10 +286,33 @@ class Net(pl.LightningModule):
                                       ,nrow = 4)
                     log['error'] =0
                     
+=======
+               
+                imgs_new = new_imgs.transpose(1, 2)
+                img_ = self.unpreprocess(imgs_new[0]).cpu() # batch 0, ref image
+                img_ = rearrange(img_, 'n c h w -> c h (n w)')
+                depth_gt_ = visualize_depth(depths['level_0'][0])
+                depth_pred_ = visualize_depth(results['depth_0'][0]*masks['level_0'][0])
+                prob = visualize_prob(results['confidence_0'][0]*masks['level_0'][0])
+               
+                stack1 = torch.cat([img_,depth_gt_,  depth_pred_, prob],dim =-1) # (4, 3, H, W)
+               
+                # vutils.save_image(stack, 
+                #                   f'/root/autodl-tmp/images/outputs/d3c/train/d3c_pred_net_{self.current_epoch}_{batch_idx}.png')
+                
+                imgs = imgs.transpose(1, 2)
+                img_ = self.unpreprocess(imgs[0]).cpu() # batch 0, ref image
+                img_ = rearrange(img_, 'n c h w -> c h (n w)')
+                depth_gt_ = visualize_depth(depths['level_0'][0])
+                depth_pred_ = visualize_depth(result_original['depth_0'][0]*masks['level_0'][0])
+                prob = visualize_prob(result_original['confidence_0'][0]*masks['level_0'][0])
+                stack2 = torch.cat([img_, depth_gt_, depth_pred_, prob],dim=-1) # (4, 3, H, W)
+                stack = torch.stack([stack1, stack2], dim=0)
+                
+                vutils.save_image(stack, f'/root/autodl-tmp/images/d3c/train/d3c_ori_net_{self.current_epoch}_{batch_idx}.png'
+                                    ,nrow = 4)
+>>>>>>> Stashed changes
                     
-
-                except:
-                    log['error'] = 1
 
                 depth_pred = results['depth_0']
                 depth_old = result_original['depth_0']
@@ -324,6 +355,7 @@ class Net(pl.LightningModule):
         
 
         epochs = self.current_epoch
+<<<<<<< Updated upstream
        
         # self.log('val_loss', loss, on_step=True, on_epoch=True)
         # self.log('val_depth_loss', loss_depth, on_step=True, on_epoch=True)
@@ -335,6 +367,14 @@ class Net(pl.LightningModule):
         log_dict["val/depth_loss_ratio"] = round(log_dict["val/depth_loss_ratio"], 4)
         self.log_dict(log_dict, on_epoch=True, on_step=True, prog_bar=True)
         
+=======
+        try:
+            self.log('val_loss', loss, on_step=True, on_epoch=True)
+            self.log('val_depth_loss', loss_depth, on_step=True, on_epoch=True)
+            self.log('val_ratio: refined/original', loss_depth/(1e-10 + loss_original),prog_bar=True, on_step=True, on_epoch=True)
+        except:
+            print('error')
+>>>>>>> Stashed changes
         if batch_idx%50 == 0:
 
             denormalize = T.Compose([T.Normalize(mean=[0., 0., 0.],
@@ -361,27 +401,31 @@ class Net(pl.LightningModule):
         log= {}
         with torch.no_grad():
             if batch_idx%10 == 0:
-                try:
-                    img_ = self.unpreprocess(new_imgs[0,0]).cpu() # batch 0, ref image
-                    depth_gt_ = visualize_depth(depths['level_0'][0])
-                    depth_pred_ = visualize_depth(results['depth_0'][0]*masks['level_0'][0])
-                    prob = visualize_prob(results['confidence_0'][0]*masks['level_0'][0])
-                    stack = torch.stack([img_, depth_gt_, depth_pred_, prob]) # (4, 3, H, W)
-                    self.logger.experiment.add_images('val/image_pred_prob',
-                                                    stack, self.global_step)
-                    
                 
-                    img_ = self.unpreprocess(imgs[0,0]).cpu() # batch 0, ref image
-                    depth_gt_ = visualize_depth(depths['level_0'][0])
-                    depth_pred_ = visualize_depth(result_original['depth_0'][0]*masks['level_0'][0])
-                    prob = visualize_prob(result_original['confidence_0'][0]*masks['level_0'][0])
-                    stack = torch.stack([img_, depth_gt_, depth_pred_, prob]) # (4, 3, H, W)
-                    self.logger.experiment.add_images('val/image_GT_prob_old',
-                                                    stack, self.global_step)
-                    log['error'] =0
-                except Exception as e:
-                    print(e)
-                    log['error'] = 1
+                img_ = self.unpreprocess(new_imgs[0]).cpu() # batch 0, ref image
+                
+                depth_gt_ = visualize_depth(depths['level_0'][0])
+                depth_pred_ = visualize_depth(results['depth_0'][0]*masks['level_0'][0])
+                prob = visualize_prob(results['confidence_0'][0]*masks['level_0'][0])
+                stack1 = torch.stack([depth_gt_, depth_pred_, prob]) # (3, 3, H, W)
+                stack1 = torch.cat([stack1,img_],dim=0)
+                
+                
+            
+                img_ = self.unpreprocess(imgs[0]).cpu() # batch 0, ref image
+               
+                depth_gt_ = visualize_depth(depths['level_0'][0])
+                depth_pred_ = visualize_depth(result_original['depth_0'][0]*masks['level_0'][0])
+                prob = visualize_prob(result_original['confidence_0'][0]*masks['level_0'][0])
+                stack2 = torch.stack([ depth_gt_, depth_pred_, prob]) # (4, 3, H, W)
+                stack2 = torch.cat([stack2,img_],dim=0)
+                stack = torch.cat([stack1, stack2], dim=0)
+                save_path = f'/root/autodl-tmp/images/d3c/val/d3c_ori_net_{self.current_epoch}_{batch_idx}.png'
+               
+                vutils.save_image(stack, save_path, nrow = 4)
+                
+
+                    
 
             depth_pred = results['depth_0']
             depth_old = result_original['depth_0']
@@ -652,7 +696,7 @@ if __name__ == "__main__":
                   
                     val_check_interval=1.0,
                     logger=logger,
-                    # resume_from_checkpoint='/root/autodl-tmp/project/dp_simple/ckpts/d3c_net_epoch=54.ckpt'
+                    resume_from_checkpoint='/root/autodl-tmp/checkpoints/d3n/last.ckpt'
                     )
     model = CascadeMVSNet(n_depths=[8,32,48],
                         interval_ratios=[1.0,2.0,4.0],
@@ -663,10 +707,17 @@ if __name__ == "__main__":
 
 
     trial = namedtuple('trial', ['nf', 'lr', 'num_groups1', 'num_groups2'])
+<<<<<<< Updated upstream
     trial.nf = 32
     trial.lr = 1e-4
     trial.num_groups1 = 1
     trial.num_groups2 = 2
+=======
+    trial.nf = 16
+    trial.lr = 1e-3
+    trial.num_groups1 = 5
+    trial.num_groups2 = 6
+>>>>>>> Stashed changes
     model = build_model(trial, 100,1, 3,9, model)
     
     model.train(True)

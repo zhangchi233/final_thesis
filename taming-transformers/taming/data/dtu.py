@@ -11,7 +11,7 @@ from torchvision import transforms as T
 
 class DTUDataset(Dataset):
     def __init__(self, root_dir, split, n_views=3, levels=3, depth_interval=2.65,
-                 img_wh=None,abs_error ="abs",output_total=False,threshold = 0.8):
+                 img_wh=None,abs_error ="abs",output_total=False,threshold = 4.7):
         """
         img_wh should be set to a tuple ex: (1152, 864) to enable test mode!
         """
@@ -73,7 +73,7 @@ class DTUDataset(Dataset):
                     for light_idx in light_idxs:
                         output_key = f"{scan}_{ref_view}_{src_views[0]}_{src_views[1]}"
                         losses = self.output_pkl[output_key]
-                        if min(losses)/losses[light_idx] <self.threshold:
+                        if losses[light_idx] > self.threshold:
                             
                             self.metas += [(scan, ref_view,light_idx, src_views)]
                          
