@@ -41,19 +41,19 @@ def decode_batch(batch):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Parser for Fast-Neural-Style")
     parser.add_argument("--dataset_path", type=str, required=True,default = "/root/autodl-tmp/mvs_training", help="path to training dataset")
-    parser.add_argument("--style_image", type=str, default="style-images/mosaic.jpg", help="path to style image")
+    parser.add_argument("--style_image", type=str, default="style-images/mse.jpg", help="path to style image")
     parser.add_argument("--epochs", type=int, default=1000, help="Number of training epochs")
     parser.add_argument("--batch_size", type=int, default=2, help="Batch size for training")
     parser.add_argument("--image_size", type=int, default=256, help="Size of training images")
     parser.add_argument("--style_size", type=int, help="Size of style image")
     parser.add_argument("--lambda_content", type=float, default=1e5, help="Weight for content loss")
     parser.add_argument("--lambda_style", type=float, default=1e10, help="Weight for style loss")
-    parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
+    parser.add_argument("--lr", type=float, default=1e-6, help="Learning rate")
     parser.add_argument("--checkpoint_model", type=str, help="Optional path to checkpoint model")
     parser.add_argument("--checkpoint_interval", type=int, default=2000, help="Batches between saving model")
     parser.add_argument("--sample_interval", type=int, default=100, help="Batches between saving image samples")
     args = parser.parse_args(["--dataset_path","/root/autodl-tmp/mvs_training/dtu",
-                              "--checkpoint_model","/root/autodl-tmp/checkpoints/mosaic_34000.pth"])
+                              "--checkpoint_model","/root/autodl-tmp/checkpoints/mse_44000.pth"])
 
     style_name = args.style_image.split("/")[-1].split(".")[0]
     os.makedirs(f"images/outputs/{style_name}-training", exist_ok=True)
@@ -73,8 +73,9 @@ if __name__ == "__main__":
     #vgg = VGG16(requires_grad=False).to(device)
 
     # Load checkpoint model if specified
-    if args.checkpoint_model:
+    if True:
         transformer.load_state_dict(torch.load(args.checkpoint_model))
+        print(f"Loaded checkpoint model from {args.checkpoint_model}")
 
     # Define optimizer and loss
     optimizer = Adam(transformer.parameters(), args.lr)
@@ -149,7 +150,7 @@ if __name__ == "__main__":
             depthloss = (depth_loss-depth_ori)*10
 
 
-            total_loss = depthloss# + style_loss
+            total_loss = depthloss+ style_loss
             total_loss.backward()
             optimizer.step()
 
@@ -196,6 +197,14 @@ if __name__ == "__main__":
 
 
             )
+            batches_done = epoch * len(dataloader) + batch_i + 1
+            if batches_done % args.sample_interval == 0:
+
+                save_sample(batches_done,images)
+
+            if args.checkpoint_interval > 0 and batches_done % args.checkpoint_interval == 0:
+                style_name = os.path.basename(args.style_image).split(".")[0]
+                torch.save(transformer.state_dict(), f"checkpoints/{style_name}_{batches_done}.pth")
         epoch_metrics = {"content": [], "mse": [], "total": [],"depth_ratio":[],
         'abs/abs_original':[],
         "acc_1mm/acc_1mm_original":[],
@@ -204,14 +213,7 @@ if __name__ == "__main__":
         "acc_4mm/acc_4mm_original":[],
         }
         tqdm_bar = tqdm(valloader)
-        batches_done = epoch * len(dataloader) + batch_i + 1
-        if batches_done % args.sample_interval == 0:
-
-            save_sample(batches_done,images)
-
-        if args.checkpoint_interval > 0 and batches_done % args.checkpoint_interval == 0:
-            style_name = os.path.basename(args.style_image).split(".")[0]
-            torch.save(transformer.state_dict(), f"checkpoints/{style_name}_{batches_done}.pth")
+        
         with torch.no_grad():
             for batch_i, batch in enumerate(tqdm_bar):
                 target_imgs = batch['target_imgs']
@@ -291,5 +293,9 @@ if __name__ == "__main__":
 
 
                 )
+                batches_done = epoch * len(dataloader) + batch_i + 1
+                if batches_done % args.sample_interval == 0:
+
+                    save_sample(batches_done,images)
             
             
