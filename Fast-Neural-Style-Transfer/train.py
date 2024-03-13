@@ -41,19 +41,20 @@ def decode_batch(batch):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Parser for Fast-Neural-Style")
     parser.add_argument("--dataset_path", type=str, required=True,default = "/root/autodl-tmp/mvs_training", help="path to training dataset")
-    parser.add_argument("--style_image", type=str, default="style-images/mse.jpg", help="path to style image")
+    parser.add_argument("--style_image", type=str, default="style-images/train.jpg", help="path to style image")
     parser.add_argument("--epochs", type=int, default=1000, help="Number of training epochs")
     parser.add_argument("--batch_size", type=int, default=2, help="Batch size for training")
     parser.add_argument("--image_size", type=int, default=256, help="Size of training images")
     parser.add_argument("--style_size", type=int, help="Size of style image")
     parser.add_argument("--lambda_content", type=float, default=1e5, help="Weight for content loss")
     parser.add_argument("--lambda_style", type=float, default=1e10, help="Weight for style loss")
-    parser.add_argument("--lr", type=float, default=1e-6, help="Learning rate")
+    parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
     parser.add_argument("--checkpoint_model", type=str, help="Optional path to checkpoint model")
     parser.add_argument("--checkpoint_interval", type=int, default=2000, help="Batches between saving model")
     parser.add_argument("--sample_interval", type=int, default=100, help="Batches between saving image samples")
     args = parser.parse_args(["--dataset_path","/root/autodl-tmp/mvs_training/dtu",
-                              "--checkpoint_model","/root/autodl-tmp/checkpoints/mse_44000.pth"])
+                             # "--checkpoint_model","/root/autodl-tmp/checkpoints/mse_44000.pth"
+                              ])
 
     style_name = args.style_image.split("/")[-1].split(".")[0]
     os.makedirs(f"images/outputs/{style_name}-training", exist_ok=True)
@@ -62,10 +63,10 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Create dataloader for the training data
-    train_dataset = DTUDataset(root_dir = args.dataset_path,split="val")
+    train_dataset = DTUDataset(root_dir = args.dataset_path,split="train")
     dataloader = DataLoader(train_dataset, batch_size=args.batch_size)
 
-    val_dataset = DTUDataset(root_dir = args.dataset_path,split="test")
+    val_dataset = DTUDataset(root_dir = args.dataset_path,split="val")
     valloader = DataLoader(train_dataset, batch_size=args.batch_size)
 
     # Defines networks
@@ -73,7 +74,7 @@ if __name__ == "__main__":
     #vgg = VGG16(requires_grad=False).to(device)
 
     # Load checkpoint model if specified
-    if True:
+    if False:
         transformer.load_state_dict(torch.load(args.checkpoint_model))
         print(f"Loaded checkpoint model from {args.checkpoint_model}")
 
