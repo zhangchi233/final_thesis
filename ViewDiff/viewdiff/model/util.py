@@ -61,7 +61,7 @@ class ModelConfig:
 
     gradient_checkpointing: bool = False
     """Whether or not to use gradient checkpointing to save memory at the expense of slower backward pass."""
-
+    cpu: bool = True
 
 @dataclass
 class CrossFrameAttentionConfig:

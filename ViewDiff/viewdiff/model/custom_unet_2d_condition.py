@@ -304,7 +304,7 @@ class UNet2DConditionCrossFrameInExistingAttnModel(ModelMixin, ConfigMixin):
         self.n_input_images = n_input_images
         self.unproj_reproj_mode = unproj_reproj_mode
         self.use_unproj_reproj_in_blocks = (
-            unproj_reproj_mode == "only_unproj_reproj" or unproj_reproj_mode == "with_cfa"
+            unproj_reproj_mode == "only_unproj_reproj" or unproj_reproj_mode == "with_unproj_cfa"
         )
         self.use_cfa = (
             unproj_reproj_mode == "with_cfa" or unproj_reproj_mode == "none"
@@ -1323,6 +1323,7 @@ class UNet2DConditionCrossFrameInExistingAttnModel(ModelMixin, ConfigMixin):
         # upsample size should be forwarded when sample is not a multiple of `default_overall_up_factor`
         forward_upsample_size = False
         upsample_size = None
+        # sample: v*b,c,h,w
 
         if any(s % default_overall_up_factor != 0 for s in sample.shape[-2:]):
             logger.info("Forward upsample size to force interpolation output size.")
@@ -1349,11 +1350,10 @@ class UNet2DConditionCrossFrameInExistingAttnModel(ModelMixin, ConfigMixin):
             encoder_attention_mask = (1 - encoder_attention_mask.to(sample.dtype)) * -10000.0
             encoder_attention_mask = encoder_attention_mask.unsqueeze(1)
 
-        # 0. center input if necessary
+        # 0. center input if necessary 
         input_sample = sample.clone()
         if self.config.center_input_sample:
             sample = 2 * sample - 1.0
-
         # 1. time
         timesteps = timestep.clone()
         if not torch.is_tensor(timesteps):

@@ -33,14 +33,14 @@ from accelerate.tracking import GeneralTracker, on_main_process, logger
 from .io_util import convert_to_tensorboard_dict, IOConfig
 
 from .data.co3d.co3d_dataset import CO3DConfig, CO3DDataset, CO3DDreamboothDataset
-
+from .data.dtu.dtu import DTUConfig, DTUDataset
 
 from .model.util import ModelConfig, CrossFrameAttentionConfig
 from .model.custom_unet_2d_condition import (
     UNet2DConditionCrossFrameInExistingAttnModel
 )
 from diffusers.loaders import LoraLoaderMixin
-
+import bitsandbytes
 
 @dataclass
 class TrainingConfig:
@@ -291,7 +291,7 @@ def check_local_rank(training_config: TrainingConfig):
     return training_config
 
 
-def setup_accelerate(finetune_config: FinetuneConfig, dataset_config: CO3DConfig, logger):
+def setup_accelerate(finetune_config: FinetuneConfig, dataset_config: Union[CO3DConfig,DTUConfig], logger):
     logging_dir = os.path.join(finetune_config.io.output_dir, finetune_config.io.logging_dir)
     accelerator_project_config = ProjectConfiguration(
         project_dir=finetune_config.io.output_dir,
@@ -302,6 +302,7 @@ def setup_accelerate(finetune_config: FinetuneConfig, dataset_config: CO3DConfig
     else:
         log_with = finetune_config.io.report_to
     accelerator = Accelerator(
+
         gradient_accumulation_steps=finetune_config.optimizer.gradient_accumulation_steps,
         mixed_precision=finetune_config.training.mixed_precision,
         log_with=log_with,
@@ -571,13 +572,15 @@ def setup_model_and_optimizer(
 
 def setup_train_val_dataloaders(
     finetune_config: FinetuneConfig,
-    dataset_config: CO3DConfig,
-    validation_dataset_config: CO3DConfig,
-    accelerator: Accelerator,
-):
+    dataset_config: Union[CO3DConfig, DTUConfig],
+    validation_dataset_config: Union[CO3DConfig, DTUConfig],
+    accelerator: Accelerator,):  
+    assert type(dataset_config) == type(validation_dataset_config), "dataset_config and validation_dataset_config should be of the same type"
     # Get the train dataset
     if isinstance(dataset_config, CO3DConfig):
         train_dataset = CO3DDataset(dataset_config)
+    elif isinstance(dataset_config, DTUConfig):
+        train_dataset = DTUDataset(dataset_config)
     else:
         raise NotImplementedError("unsupported dataset_config", type(dataset_config))
 
@@ -596,6 +599,8 @@ def setup_train_val_dataloaders(
                 # exclude train sequences from being picked if we do generalization training
                 validation_dataset_config.dataset_args.exclude_sequence += train_dataset.get_all_sequences()
             validation_dataset = CO3DDataset(validation_dataset_config)
+        elif isinstance(validation_dataset_config, DTUConfig):
+            validation_dataset = DTUDataset(validation_dataset_config)
         else:
             raise NotImplementedError("unsupported validation_dataset_config", type(validation_dataset_config))
         if len(validation_dataset) == 0:
@@ -610,12 +615,21 @@ def setup_train_val_dataloaders(
 
         # We need to initialize the trackers we use, and also store our configuration.
         # The trackers initializes automatically on the main process.
-        selected_sequences = {
-            "selected_sequences": {
-                "train": train_dataset.get_all_sequences(),
-                "val": validation_dataset.get_all_sequences(),
+        if isinstance(dataset_config, CO3DConfig):
+            selected_sequences = {
+                "selected_sequences": {
+                    "train": train_dataset.get_all_sequences(),
+                    "val": validation_dataset.get_all_sequences(),
+                }
+
             }
-        }
+        elif isinstance(dataset_config, DTUConfig):
+            selected_sequences = {
+                "selected_sequences": {
+                    "train": train_dataset.metas,
+                    "val": validation_dataset.metas,
+                }
+            }
         config = {**asdict(dataset_config), **asdict(finetune_config), **selected_sequences}
         accelerator.init_trackers(f"view-diff", config=convert_to_tensorboard_dict(config))
         with open(os.path.join(finetune_config.io.output_dir, f"config.json"), "w") as f:

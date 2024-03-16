@@ -6,7 +6,7 @@ import json
 import imageio
 import numpy as np
 from datetime import datetime
-from typing import List, Dict, Tuple, Literal, Optional
+from typing import List, Dict, Tuple, Literal, Optional,Union   
 from dataclasses import dataclass
 from collections.abc import MutableMapping, Iterable
 
@@ -17,7 +17,7 @@ from torch.nn.functional import interpolate
 from torchvision.utils import make_grid
 
 from .data.co3d.co3d_dataset import CO3DConfig
-
+from .data.dtu.dtu import DTUConfig
 from .data.create_video_from_image_folder import main as create_video_from_image_folder
 
 
@@ -83,9 +83,8 @@ class IOConfig:
 def setup_output_directories(
     io_config: IOConfig,
     model_config: dataclass,
-    dataset_config: CO3DConfig,
-    is_train: bool = False,
-):
+    dataset_config: Union[DTUConfig, CO3DConfig],
+    is_train: bool = False,):
     """Creates output directories for an experiment as specified in the provided configs.
 
     Args:
@@ -95,7 +94,7 @@ def setup_output_directories(
         is_train (bool, optional): _description_. Defaults to False.
     """
 
-    if isinstance(dataset_config, CO3DConfig):
+    if isinstance(dataset_config, CO3DConfig,):
         # append category to output_dir
         category_name = "all" if dataset_config.category is None else dataset_config.category
         io_config.output_dir = os.path.join(io_config.output_dir, category_name)
@@ -111,6 +110,24 @@ def setup_output_directories(
         io_config.output_dir = os.path.join(
             io_config.output_dir, "subset_all" if dataset_config.subset is None else f"subset_{dataset_config.subset}"
         )
+    elif isinstance(dataset_config,DTUConfig):
+        # append category to output_dir
+        category_name = "all" if dataset_config.category is None else dataset_config.category
+        io_config.output_dir = os.path.join(io_config.output_dir, category_name)
+
+        # append n_sequences to output_dir
+        if dataset_config.max_sequences > -1:
+            io_config.output_dir = os.path.join(io_config.output_dir, f"{dataset_config.max_sequences}_sequences")
+
+        # append picked_sequences to output_dir
+        io_config.output_dir = os.path.join(io_config.output_dir, ",".join(dataset_config.dataset_args.pick_sequence))
+
+        # append subset to output_dir
+        io_config.output_dir = os.path.join(
+            io_config.output_dir, "subset_all" if dataset_config.subset is None else f"subset_{dataset_config.subset}"
+        )
+
+        
     else:
         raise NotImplementedError("unsupported dataset config", type(dataset_config))
 

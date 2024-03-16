@@ -454,7 +454,7 @@ class CO3DDataset(Dataset):
         R, tvec, K = opencv_from_cameras_projection(camera, image_size=image_hw)
         pose_world2cam = torch.cat([R, tvec.unsqueeze(2)], dim=-1)
 
-        # add hom row
+        # add hom row̉
         hom = torch.zeros(4, dtype=pose_world2cam.dtype)[None, None]
         hom[..., -1] = 1
         pose_world2cam = torch.cat([pose_world2cam, hom], dim=1)
@@ -463,7 +463,7 @@ class CO3DDataset(Dataset):
         crop_top = crop_params[0]
         crop_left = crop_params[1]
         crop_h = crop_params[2]
-        crop_w = crop_params[3]
+        cr̉op_w = crop_params[3]
         K[..., 0, 2] -= crop_left
         K[..., 1, 2] -= crop_top
         adjusted_source_image_hw = [

@@ -9,28 +9,209 @@ from PIL import Image
 import torch
 from torchvision import transforms as T
 
+
+import os
+import json
+import random
+from pathlib import Path
+from dataclasses import dataclass
+from typing import Literal, Tuple, Optional
+import numpy as np
+from PIL import Image
+from tqdm import tqdm
+from cachetools import cached, LRUCache
+from cachetools.keys import hashkey
+
+import torch
+from torch.utils.data import Dataset
+from torchvision.transforms import RandomCrop
+from torchvision.transforms.functional import crop
+from torch.nn.functional import interpolate
+
+from pytorch3d.renderer.cameras import PerspectiveCameras
+from pytorch3d.utils.camera_conversions import opencv_from_cameras_projection
+from pytorch3d.io import IO
+import sys
+import os
+path = os.getcwd()
+print(path)
+
+@dataclass
+class DatasetArgsConfig:
+    """Arguments for JsonIndexDataset. See here for a full list: pytorch3d/implicitron/dataset/json_index_dataset.py"""
+
+    remove_empty_masks: bool = False
+    """Removes the frames with no active foreground pixels
+            in the segmentation mask after thresholding (see box_crop_mask_thr)."""
+
+    load_point_clouds: bool = False
+    """If pointclouds should be loaded from the dataset"""
+
+    load_depths: bool = False
+    """If depth_maps should be loaded from the dataset"""
+
+    load_depth_masks: bool = False
+    """If depth_masks should be loaded from the dataset"""
+
+    load_masks: bool = False
+    """If foreground masks should be loaded from the dataset"""
+
+    box_crop: bool = False
+    """Enable cropping of the image around the bounding box inferred
+            from the foreground region of the loaded segmentation mask; masks
+            and depth maps are cropped accordingly; cameras are corrected."""
+
+    image_width: Optional[int] = 640
+    """The width of the returned images, masks, and depth maps;
+            aspect ratio is preserved during cropping/resizing."""
+
+    image_height: Optional[int] = 512
+    """The height of the returned images, masks, and depth maps;
+            aspect ratio is preserved during cropping/resizing."""
+
+    pick_sequence: Tuple[str, ...] = ()
+    """A list of sequence names to restrict the dataset to."""
+
+    exclude_sequence: Tuple[str, ...] = ()
+    """a list of sequences to exclude"""
+
+    n_frames_per_sequence: int = -1
+    """If > 0, randomly samples #n_frames_per_sequence
+        frames in each sequences uniformly without replacement if it has
+        more frames than that; applied before other frame-level filters."""
+
+
+@dataclass
+class BatchConfig:
+    """Arguments for how batches are constructed."""
+
+    n_parallel_images: int = 3
+    """How many images of the same sequence are selected in one batch (used for multi-view supervision)."""
+
+    image_width: int = 640
+    """The desired image width after applying all augmentations (e.g. crop) and resizing operations."""
+
+    image_height: int = 512
+    """The desired image height after applying all augmentations (e.g. crop) and resizing operations."""
+
+    other_selection: Literal["random", "sequence", "mix", "fixed-frames"] = "random"
+    """How to select the other frames for each batch.
+        The mode 'random' selects the other frames at random from all remaining images in the dataset.
+        The mode 'sequence' selects the other frames in the order as they appear after the first frame (==idx) in the dataset. Selects i-th other image as (idx + i * sequence_offset).
+        The mode 'mix' decides at random which of the other two modes to choose. It also randomly samples sequence_offset when choosing the mode 'sequence'.
+        The mode 'fixed-frames' gets as frame indices as input and directly uses them."""
+
+    other_selection_frame_indices: Tuple[int, ...] = ()
+    """The frame indices to use when --other_selection=fixed-frames. Must be as many indices as --n_parallel_images."""
+
+    sequence_offset: int = 1
+    """If other_selection='sequence', uses this offset to determine how many images to skip for each next frame.
+    Allows to do short-range and long-range consistency tests by setting to a small or large number."""
+
+    crop: Literal["random", "foreground", "resize", "center"] = "random"
+    """Performs a crop on the original image such that the desired (image_height, image_width) is achieved. 
+       The mode 'random' crops randomly in the image.
+       The mode 'foreground' crops centered around the foreground (==object) mask.
+       The mode 'resize' performs brute-force resizing which ignores the aspect ratio.
+       The mode 'center' crops centered around the middle pixel (similar to DFM baseline)."""
+
+    mask_foreground: bool = False
+    """If true, will mask out the background and only keep the foreground."""
+
+    prompt: str = "Editorial Style Photo, ${category}, 4k --ar 16:9"
+    """The text prompt for generation. The string ${category} will be replaced with the actual category."""
+
+    use_blip_prompt: bool = False
+    """If True, will use blip2 generated prompts for the sequence instead of the prompt specified in --prompt."""
+
+    load_recentered: bool = False
+    """If True, will load the recentered poses/bbox from the dataset. Will skip all sequences for which this was not pre-computed."""
+
+    replace_pose_with_spherical_start_phi: float = -400.0
+    """Replace the poses in each batch with spherical ones that go around the object in a partial circle of this many degrees. Default: -400, meaning do not replace."""
+
+    replace_pose_with_spherical_end_phi: float = 360.0
+    """Replace the poses in each batch with spherical ones that go around the object in a partial circle of this many degrees. Default: -1, meaning do not replace."""
+
+    replace_pose_with_spherical_phi_endpoint: bool = False
+    """If True, will set endpoint=True for np.linspace, else False."""
+
+    replace_pose_with_spherical_radius: float = 4.0
+    """Replace the poses in each batch with spherical ones that go around the object in a partial circle of this radius. Default: 3.0."""
+
+    replace_pose_with_spherical_theta: float = 45.0
+    """Replace the poses in each batch with spherical ones that go around the object in a partial circle of this elevation. Default: 45.0."""
+
+
+
+    
+@dataclass
+class DTUConfig:
+    """Arguments for setup of the CO3Dv2_Dataset."""
+    dataset_args: DatasetArgsConfig
+    batch: BatchConfig
+
+   
+    
+
+    category: Optional[str] = None
+    """If specified, only selects this category from the dataset. Can be a comma-separated list of categories as well."""
+
+    subset: Optional[str] = None
+    """If specified, only selects images corresponding to this subset. See https://github.com/facebookresearch/co3d for available options."""
+
+    split: Optional[str] = None
+    """Must be specified if --subset is specified. Tells which split to use from the subset."""
+
+    max_sequences: int = -1
+    """If >-1, randomly select max_sequence sequences per category. Only sequences _with pointclouds_ are selected. Mutually exclusive with --sequence."""
+
+    seed: Optional[int] = 42
+    """Random seed for all rng objects"""
+ 
+    split: Optional[str] = None
+    """Must be specified if --subset is specified. Tells which split to use from the subset."""
+
+    root_dir: str = "/root/autodl-tmp/mvs_training/dtu/"
+
+    n_views:int=3 
+    levels:int=3 
+    depth_interval:int =2.65
+    img_wh:int=None
+    abs_error:Optional[str] ="abs"
+    output_total:Optional[bool]=False
+    threshold: Optional[int] = 4.7
+    prompt_dir: Optional[str] = "/root/autodl-tmp/mvs_training/dtu/co3d_blip2_captions_final.json"
+
 class DTUDataset(Dataset):
-    def __init__(self, root_dir, split, n_views=3, levels=3, depth_interval=2.65,
-                 img_wh=None,abs_error ="abs",output_total=False,threshold = 4.7):
+    def __init__(self, config: DTUConfig):
         """
         img_wh should be set to a tuple ex: (1152, 864) to enable test mode!
         """
-        self.root_dir = root_dir
-        self.split = split
+
+        self.root_dir = config.root_dir
+        self.split = config.split
         assert self.split in ['train', 'val', 'test'], \
             'split must be either "train", "val" or "test"!'
-        self.img_wh = img_wh
-        if img_wh is not None:
-            assert img_wh[0]%32==0 and img_wh[1]%32==0, \
+        self.img_wh = config.img_wh
+        if config.img_wh is not None:
+            if type(config.img_wh) is int:
+                self.img_wh = (config.img_wh, config.img_wh)
+            assert self.img_wh[0]%32==0 and self.img_wh[1]%32==0, \
                 'img_wh must both be multiples of 32!'
-        self.threshold = threshold
+        self.threshold = config.threshold
         self.build_metas()
-        self.n_views = n_views
-        self.levels = levels # FPN levels
-        self.depth_interval = depth_interval
+        self.n_views = config.n_views
+        self.levels = config.levels # FPN levels
+        self.depth_interval = config.depth_interval
         self.build_proj_mats()
         self.define_transforms()
-        self.output_total = output_total
+        self.output_total = config.output_total
+        prompt_dir = config.prompt_dir
+        if prompt_dir != None:
+            import json
+            captions = json.load(open(prompt_dir))
+        self.prompt_dir =captions
         
       
         
@@ -216,6 +397,9 @@ class DTUDataset(Dataset):
         target_imgs = []
         Ks = []
         Rs = []
+        intensity_stats =[]
+        prompt = str(np.random.choice(self.prompt_dir[scan][str(ref_view)],1)[0])
+        sample['prompt'] = [prompt]
         for i, vid in enumerate(view_ids):
         # NOTE that the id in image file names is from 1 to 49 (not 0~48)
         
@@ -262,6 +446,9 @@ class DTUDataset(Dataset):
             else:
                 
                 proj_mats += [proj_mat_ls @ ref_proj_inv]
+            var, mean = torch.var_mean(img)
+            intensity_stat = torch.stack([mean, var], dim=0)
+            intensity_stats.append(intensity_stat)
     
     
         imgs = torch.stack(imgs) # (V, 3, H, W)
@@ -269,15 +456,22 @@ class DTUDataset(Dataset):
         proj_mats = torch.stack(proj_mats)[:,:,:3] # (V-1, self.levels, 3, 4) from fine to coarse
         
         
-        Ks = torch.stack(Ks)
-        Rs = torch.stack(Rs)
-        sample['Ks'] = Ks
-        sample['Rs'] = Rs
+        Ks = np.stack(Ks)
+        Rs = np.stack(Rs)
+        sample['pose'] = Rs
+        sample['K'] = Ks
         sample['images'] = imgs
+        sample["intensity_stats"] = torch.stack(intensity_stats)
         sample['proj_mats'] = proj_mats
         sample['depth_interval'] = torch.FloatTensor([self.depth_interval])
         sample['scan_vid'] = (scan, ref_view)
 
         sample['target_imgs'] = target_imgs
+        sample["bbox"] =torch.tensor([[-1, -1, -1], [1, 1, 1]], dtype=torch.float32)
 
         return sample
+
+
+
+
+

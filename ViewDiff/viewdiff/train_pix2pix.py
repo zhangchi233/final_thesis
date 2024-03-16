@@ -19,6 +19,7 @@ from diffusers import (
     DDPMScheduler,
     UNet2DConditionModel,
     DPMSolverMultistepScheduler,
+    EulerAncestralDiscreteScheduler
 )
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -69,8 +70,7 @@ from viewdiff.train_util import (
 from viewdiff.metrics.image_metrics import calc_psnr_ssim_lpips
 
 from viewdiff.data.co3d.co3d_dataset import CO3DConfig
-from viewdiff.data.dtu.dtu import DTUConfig
-
+from viewdiff.data.dtu.dtu import DTUConfig,DTUDataset
 
 from viewdiff.scripts.misc.create_masked_images import remove_background
 
@@ -79,7 +79,7 @@ logger = get_logger(__name__, log_level="INFO")
 
 
 def train_and_test(
-    dataset_config: DTUConfig,
+    dataset_config:DTUConfig ,
     finetune_config: FinetuneConfig,
     validation_dataset_config: DTUConfig,
 ):
@@ -360,7 +360,7 @@ def train_and_test(
             )
             pipeline = pipeline.to(accelerator.device)
             pipeline.set_progress_bar_config(disable=False)
-            pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config)
+            pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(pipeline.scheduler.config)
             pipeline.scheduler.config.prediction_type = finetune_config.training.noise_prediction_type
 
             # run inference on one batch of the validation set
@@ -478,10 +478,12 @@ def train_step(
     orig_hw,
     dreambooth_batch = None
 ):
+
     def process_batch(batch):
         # parse batch
         # collapse K dimension into batch dimension (no concatenation happening)
         batch["prompt"] = collapse_prompt_to_batch_dim(batch["prompt"], finetune_config.model.n_input_images)
+        batch["prompt"] = [cap[0] for cap in batch["prompt"]]
         batch_size, pose = collapse_tensor_to_batch_dim(batch["pose"])
         _, K = collapse_tensor_to_batch_dim(batch["K"])
         _, intensity_stats = collapse_tensor_to_batch_dim(batch["intensity_stats"])
@@ -510,10 +512,16 @@ def train_step(
         if "images" in batch:
             # convert images to latent space.
             _, images = collapse_tensor_to_batch_dim(batch["images"])
+            _, target_imgs =  collapse_tensor_to_batch_dim(batch["target_imgs"])
+            target_imgs = images.squeeze(1)
+            target_imgs = target_imgs[:, :3].to(weight_dtype) 
+            target_latents = vae.encode(target_imgs).latent_dist.sample()
+            target_latents = target_latents * vae.config.scaling_factor
+
             images = images.squeeze(1)
             images = images[:, :3].to(weight_dtype)  # remove alpha channel
             latents = vae.encode(images).latent_dist.sample()
-            latents = latents * vae.config.scaling_factor
+            latents = latents # * vae.config.scaling_factor
         else:
             raise ValueError("images not found in batch")
 
@@ -541,7 +549,8 @@ def train_step(
 
         # Add noise to the latents according to the noise magnitude at each timestep
         # (this is the forward diffusion process)
-        noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+        noisy_latents = noise_scheduler.add_noise(target_latents, noise, timesteps)
+        noisy_latents = torch.cat([noisy_latents,latents],dim = 1)
 
         # convert prompt to input_ids
         batch["input_ids"] = tokenize_captions(tokenizer, batch["prompt"]).to(latents.device)
@@ -570,6 +579,20 @@ def train_step(
             raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
 
         # Predict w/ unet
+
+        # """
+        # test
+        # """
+        # device = "cpu"
+        
+        # noisy_latents = noisy_latents.to(device)
+        # timesteps = timesteps.to(device)
+        # encoder_hidden_states = encoder_hidden_states.to(device)
+        # cross_attention_kwargs["pose_cond"] = cross_attention_kwargs['pose_cond'].to(device)
+        # non_noisy_mask = non_noisy_mask.cpu()
+        # unet_pred_target = unet_pred_target.cpu()
+
+
         output = unet(
             noisy_latents,
             timesteps,
@@ -587,6 +610,8 @@ def train_step(
             unet_pred_target[non_noisy_mask] = unet_pred[non_noisy_mask].detach().clone().to(unet_pred_target)
 
         # compute unet-pred-loss
+        
+
         unet_pred_acc = F.mse_loss(unet_pred.float(), unet_pred_target.float(), reduction="none")
         loss = unet_pred_acc.mean()
         unet_pred_acc = unet_pred_acc.mean(dim=(1, 2, 3))
