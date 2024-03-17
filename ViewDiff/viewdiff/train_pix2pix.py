@@ -828,7 +828,9 @@ def test_step(
         known_images = known_images.squeeze(1)
     else:
         # instruct pix2pix
-        known_images = batch["images"]
+        _, known_images = collapse_tensor_to_batch_dim(batch["images"])
+        known_images = known_images.to(pipeline.device)
+        known_images = known_images.squeeze(1)
 
     pose = pose.to(pipeline.device)
     K = K.to(pipeline.device)
