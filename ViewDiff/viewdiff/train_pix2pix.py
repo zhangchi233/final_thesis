@@ -73,6 +73,13 @@ from viewdiff.data.co3d.co3d_dataset import CO3DConfig
 from viewdiff.data.dtu.dtu import DTUConfig,DTUDataset
 
 from viewdiff.scripts.misc.create_masked_images import remove_background
+# define tensorboard logger
+from torch.utils.tensorboard import SummaryWriter
+# define logger path
+logger_path = os.path.join(os.path.dirname(__file__), "..", "logs")
+# define tensorboard writer
+writer = SummaryWriter(logger_path)
+
 
 
 logger = get_logger(__name__, log_level="INFO")
@@ -255,6 +262,8 @@ def train_and_test(
                 dreambooth_batch=dreambooth_batch,
             )
 
+            
+
             # accumulate losses for logging across gradient_accumulation_steps
             for k, v in avg_step_losses.items():
                 if k not in train_losses:
@@ -310,9 +319,16 @@ def train_and_test(
 
             if global_step >= finetune_config.training.max_train_steps:
                 break
+            else:
+                
+                writer.add_scalar('Loss/train', loss, global_step)
 
+        
+               
         # log acc_per_timestep after each epoch
         if accelerator.is_main_process and finetune_config.io.log_images_every_nth > -1:
+            
+            
             for k, v in acc_per_timestep.items():
                 for t, (acc_sum, acc_count) in v.items():
                     if acc_count > 0:
@@ -334,55 +350,55 @@ def train_and_test(
         # ################
         # Val Loop
         # ################
-        unet.eval()
-        update_vol_rend_inject_noise_sigma(accelerator.unwrap_model(unet), 0.0)  # disable vol-rend noise
-        update_n_novel_images(accelerator.unwrap_model(unet), 0)  # disable skipping frame in inference mode
-        torch.cuda.empty_cache()
-        if (
-            accelerator.is_main_process
-            and finetune_config.training.validation_epochs > 0
-            and (epoch % finetune_config.training.validation_epochs) == 0
-        ):
-            logger.info(f"Running validation...")
-            # create pipeline
-            if finetune_config.model.use_ema:
-                # Store the UNet parameters temporarily and load the EMA parameters to perform inference.
-                ema_unet.store(unet.parameters())
-                ema_unet.copy_to(unet.parameters())
-            # The models need unwrapping because for compatibility in distributed training mode.
-            pipeline = CustomStableDiffusionPipeline.from_pretrained(
-                finetune_config.io.pretrained_model_name_or_path,
-                unet=accelerator.unwrap_model(unet),
-                text_encoder=accelerator.unwrap_model(text_encoder),
-                vae=accelerator.unwrap_model(vae),
-                revision=finetune_config.io.revision,
-                torch_dtype=weight_dtype,
-            )
-            pipeline = pipeline.to(accelerator.device)
-            pipeline.set_progress_bar_config(disable=False)
-            pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(pipeline.scheduler.config)
-            pipeline.scheduler.config.prediction_type = finetune_config.training.noise_prediction_type
+        # unet.eval()
+        # update_vol_rend_inject_noise_sigma(accelerator.unwrap_model(unet), 0.0)  # disable vol-rend noise
+        # update_n_novel_images(accelerator.unwrap_model(unet), 0)  # disable skipping frame in inference mode
+        # torch.cuda.empty_cache()
+        # if (
+        #     accelerator.is_main_process
+        #     and finetune_config.training.validation_epochs > 0
+        #     and (epoch % finetune_config.training.validation_epochs) == 0
+        # ):
+        #     logger.info(f"Running validation...")
+        #     # create pipeline
+        #     if finetune_config.model.use_ema:
+        #         # Store the UNet parameters temporarily and load the EMA parameters to perform inference.
+        #         ema_unet.store(unet.parameters())
+        #         ema_unet.copy_to(unet.parameters())
+        #     # The models need unwrapping because for compatibility in distributed training mode.
+        #     pipeline = CustomStableDiffusionPipeline.from_pretrained(
+        #         finetune_config.io.pretrained_model_name_or_path,
+        #         unet=accelerator.unwrap_model(unet),
+        #         text_encoder=accelerator.unwrap_model(text_encoder),
+        #         vae=accelerator.unwrap_model(vae),
+        #         revision=finetune_config.io.revision,
+        #         torch_dtype=weight_dtype,
+        #     )
+        #     pipeline = pipeline.to(accelerator.device)
+        #     pipeline.set_progress_bar_config(disable=False)
+        #     pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(pipeline.scheduler.config)
+        #     pipeline.scheduler.config.prediction_type = finetune_config.training.noise_prediction_type
 
-            # run inference on one batch of the validation set
-            test_step(
-                pipeline=pipeline,
-                batch=validation_batch,
-                model_config=finetune_config.model,
-                cfa_config=finetune_config.cross_frame_attention,
-                io_config=finetune_config.io,
-                generator=generator,
-                prefix="Validation",
-                global_step=global_step,
-                writer=accelerator.trackers[0].writer,
-                orig_hw=(validation_dataset_config.batch.image_height, validation_dataset_config.batch.image_width),
-            )
+        #     # run inference on one batch of the validation set
+        #     test_step(
+        #         pipeline=pipeline,
+        #         batch=validation_batch,
+        #         model_config=finetune_config.model,
+        #         cfa_config=finetune_config.cross_frame_attention,
+        #         io_config=finetune_config.io,
+        #         generator=generator,
+        #         prefix="Validation",
+        #         global_step=global_step,
+        #         writer=accelerator.trackers[0].writer,
+        #         orig_hw=(validation_dataset_config.batch.image_height, validation_dataset_config.batch.image_width),
+        #     )
 
-            if finetune_config.model.use_ema:
-                # Switch back to the original UNet parameters.
-                ema_unet.restore(unet.parameters())
+        #     if finetune_config.model.use_ema:
+        #         # Switch back to the original UNet parameters.
+        #         ema_unet.restore(unet.parameters())
 
-            del pipeline
-            torch.cuda.empty_cache()
+        #     del pipeline
+        #     torch.cuda.empty_cache()
     accelerator.end_training()
 
 
@@ -482,9 +498,12 @@ def train_step(
     def process_batch(batch):
         # parse batch
         # collapse K dimension into batch dimension (no concatenation happening)
+        batch["images"] = 2*batch["images"]-1
+        batch["target_imgs"] = 2*batch["target_imgs"]-1
         batch["prompt"] = collapse_prompt_to_batch_dim(batch["prompt"], finetune_config.model.n_input_images)
         batch["prompt"] = [cap[0] for cap in batch["prompt"]]
         batch_size, pose = collapse_tensor_to_batch_dim(batch["pose"])
+        
         _, K = collapse_tensor_to_batch_dim(batch["K"])
         _, intensity_stats = collapse_tensor_to_batch_dim(batch["intensity_stats"])
         pose = pose.squeeze(1)
@@ -535,7 +554,8 @@ def train_step(
 
         # per default: use same timestep within batch
         timesteps = timesteps.repeat_interleave(finetune_config.model.n_input_images)
-
+        # check if some timesteps within the batch is the same
+        assert timesteps[0] == timesteps[1]
         # check if some timesteps within the batch will be replaced with 0 (== non-noisy image)
         if not is_dreambooth and finetune_config.training.prob_images_not_noisy > 0:
             random_p_non_noisy = torch.rand((batch_size, finetune_config.model.n_input_images), device=latents.device, generator=generator)
@@ -592,7 +612,7 @@ def train_step(
         # non_noisy_mask = non_noisy_mask.cpu()
         # unet_pred_target = unet_pred_target.cpu()
 
-
+       
         output = unet(
             noisy_latents,
             timesteps,
@@ -773,6 +793,8 @@ def test_step(
 ):
     batch_size = len(batch["prompt"])
 
+    batch["images"] = 2*batch["images"]-1
+    batch["target_imgs"] = 2*batch["target_imgs"]-1
     # parse batch
     # collapse K dimension into batch dimension (no concatenation happening)
     prompt = collapse_prompt_to_batch_dim(batch["prompt"], model_config.n_input_images)

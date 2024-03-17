@@ -25,7 +25,7 @@ import sys
 import os
 path = os.getcwd()
 print(path)
-sys.path.append("/root/autodl-tmp/ViewDiff/viewdiff/data/co3d/")
+sys.path.append("/workspace/ViewDiff/viewdiff/data/co3d/")
 from util import (
     get_dataset,
     has_pointcloud,

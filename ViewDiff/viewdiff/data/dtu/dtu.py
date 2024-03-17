@@ -1,6 +1,6 @@
 from torch.utils.data import Dataset
 import sys
-sys.path.append('/root/autodl-tmp/project/dp_simple/')
+sys.path.append('/workspace/project/dp_simple/')
 from CasMVSNet_pl.datasets.utils import read_pfm
 import os
 import numpy as np
@@ -172,7 +172,7 @@ class DTUConfig:
     split: Optional[str] = None
     """Must be specified if --subset is specified. Tells which split to use from the subset."""
 
-    root_dir: str = "/root/autodl-tmp/mvs_training/dtu/"
+    root_dir: str = "/workspace/mvs_training/dtu/"
 
     n_views:int=3 
     levels:int=3 
@@ -181,7 +181,7 @@ class DTUConfig:
     abs_error:Optional[str] ="abs"
     output_total:Optional[bool]=False
     threshold: Optional[int] = 4.7
-    prompt_dir: Optional[str] = "/root/autodl-tmp/mvs_training/dtu/co3d_blip2_captions_final.json"
+    prompt_dir: Optional[str] = "/workspace/mvs_training/dtu/co3d_blip2_captions_final.json"
 
 class DTUDataset(Dataset):
     def __init__(self, config: DTUConfig):
@@ -219,9 +219,9 @@ class DTUDataset(Dataset):
         
     def build_metas(self):
         self.metas = []
-        with open(f'/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}.txt') as f:
+        with open(f'/workspace/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}.txt') as f:
             self.scans = [line.rstrip() for line in f.readlines()]
-        output_pkl = f'/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}_abs.pkl'
+        output_pkl = f'/workspace/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}_abs.pkl'
         import pickle
         with open(output_pkl, 'rb') as f:
             self.output_pkl = pickle.load(f)
@@ -455,6 +455,8 @@ class DTUDataset(Dataset):
         target_imgs = torch.stack(target_imgs)
         proj_mats = torch.stack(proj_mats)[:,:,:3] # (V-1, self.levels, 3, 4) from fine to coarse
         
+        imgs = self.unpreprocess(imgs)
+        target_imgs = self.unpreprocess(target_imgs)
         
         Ks = np.stack(Ks)
         Rs = np.stack(Rs)
