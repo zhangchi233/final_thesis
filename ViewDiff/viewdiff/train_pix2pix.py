@@ -45,7 +45,7 @@ from viewdiff.model.util import (
     CrossFrameAttentionConfig,
     build_cross_attention_kwargs,
 )
-from viewdiff.model.custom_stable_diffusion_pipeline import CustomStableDiffusionPipeline
+from viewdiff.model.custom_stable_instructPix2pix_pipeline import CustomInstructPix2pixDiffusionPipeline
 
 from viewdiff.io_util import (
     make_image_grid,
@@ -202,6 +202,70 @@ def train_and_test(
         progress_bar.update(resume_step // finetune_config.optimizer.gradient_accumulation_steps)
 
     for epoch in range(first_epoch, finetune_config.training.num_train_epochs):
+
+
+
+
+        # ################
+        # Val Loop
+        # ################
+        unet.eval()
+        update_vol_rend_inject_noise_sigma(accelerator.unwrap_model(unet), 0.0)  # disable vol-rend noise
+        update_n_novel_images(accelerator.unwrap_model(unet), 0)  # disable skipping frame in inference mode
+        torch.cuda.empty_cache()
+        if (
+            accelerator.is_main_process
+            and finetune_config.training.validation_epochs > 0
+            and (epoch % finetune_config.training.validation_epochs) == 0
+        ):
+            logger.info(f"Running validation...")
+            # create pipeline
+            if finetune_config.model.use_ema:
+                # Store the UNet parameters temporarily and load the EMA parameters to perform inference.
+                ema_unet.store(unet.parameters())
+                ema_unet.copy_to(unet.parameters())
+            # The models need unwrapping because for compatibility in distributed training mode.
+            pipeline = CustomInstructPix2pixDiffusionPipeline.from_pretrained(
+                finetune_config.io.pretrained_model_name_or_path,
+                unet=accelerator.unwrap_model(unet),
+                text_encoder=accelerator.unwrap_model(text_encoder),
+                vae=accelerator.unwrap_model(vae),
+                revision=finetune_config.io.revision,
+                torch_dtype=weight_dtype,
+            )
+            pipeline = pipeline.to(accelerator.device)
+            pipeline.set_progress_bar_config(disable=False)
+            pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(pipeline.scheduler.config)
+            pipeline.scheduler.config.prediction_type = finetune_config.training.noise_prediction_type
+
+            # run inference on one batch of the validation set
+            test_step(
+                pipeline=pipeline,
+                batch=validation_batch,
+                model_config=finetune_config.model,
+                cfa_config=finetune_config.cross_frame_attention,
+                io_config=finetune_config.io,
+                generator=generator,
+                prefix="Validation",
+                global_step=global_step,
+                writer=accelerator.trackers[0].writer,
+                orig_hw=(validation_dataset_config.batch.image_height, validation_dataset_config.batch.image_width),
+            )
+
+            if finetune_config.model.use_ema:
+                # Switch back to the original UNet parameters.
+                ema_unet.restore(unet.parameters())
+
+            del pipeline
+            torch.cuda.empty_cache()
+
+
+
+
+
+
+
+
         # ################
         # Train Loop
         # ################
@@ -347,58 +411,8 @@ def train_and_test(
 
 
         
-        # ################
-        # Val Loop
-        # ################
-        # unet.eval()
-        # update_vol_rend_inject_noise_sigma(accelerator.unwrap_model(unet), 0.0)  # disable vol-rend noise
-        # update_n_novel_images(accelerator.unwrap_model(unet), 0)  # disable skipping frame in inference mode
-        # torch.cuda.empty_cache()
-        # if (
-        #     accelerator.is_main_process
-        #     and finetune_config.training.validation_epochs > 0
-        #     and (epoch % finetune_config.training.validation_epochs) == 0
-        # ):
-        #     logger.info(f"Running validation...")
-        #     # create pipeline
-        #     if finetune_config.model.use_ema:
-        #         # Store the UNet parameters temporarily and load the EMA parameters to perform inference.
-        #         ema_unet.store(unet.parameters())
-        #         ema_unet.copy_to(unet.parameters())
-        #     # The models need unwrapping because for compatibility in distributed training mode.
-        #     pipeline = CustomStableDiffusionPipeline.from_pretrained(
-        #         finetune_config.io.pretrained_model_name_or_path,
-        #         unet=accelerator.unwrap_model(unet),
-        #         text_encoder=accelerator.unwrap_model(text_encoder),
-        #         vae=accelerator.unwrap_model(vae),
-        #         revision=finetune_config.io.revision,
-        #         torch_dtype=weight_dtype,
-        #     )
-        #     pipeline = pipeline.to(accelerator.device)
-        #     pipeline.set_progress_bar_config(disable=False)
-        #     pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(pipeline.scheduler.config)
-        #     pipeline.scheduler.config.prediction_type = finetune_config.training.noise_prediction_type
-
-        #     # run inference on one batch of the validation set
-        #     test_step(
-        #         pipeline=pipeline,
-        #         batch=validation_batch,
-        #         model_config=finetune_config.model,
-        #         cfa_config=finetune_config.cross_frame_attention,
-        #         io_config=finetune_config.io,
-        #         generator=generator,
-        #         prefix="Validation",
-        #         global_step=global_step,
-        #         writer=accelerator.trackers[0].writer,
-        #         orig_hw=(validation_dataset_config.batch.image_height, validation_dataset_config.batch.image_width),
-        #     )
-
-        #     if finetune_config.model.use_ema:
-        #         # Switch back to the original UNet parameters.
-        #         ema_unet.restore(unet.parameters())
-
-        #     del pipeline
-        #     torch.cuda.empty_cache()
+        
+        
     accelerator.end_training()
 
 
@@ -774,13 +788,13 @@ def train_step(
 
 @torch.autocast("cuda")
 def test_step(
-    pipeline: CustomStableDiffusionPipeline,
+    pipeline: CustomInstructPix2pixDiffusionPipeline,
     batch,
     model_config: ModelConfig,
     cfa_config: CrossFrameAttentionConfig,
     io_config: IOConfig,
     orig_hw,
-    guidance_scale: float = 7.5,
+    guidance_scale: float = -1,
     generator=None,
     prefix: str = None,
     global_step: int = 0,
@@ -797,7 +811,10 @@ def test_step(
     batch["target_imgs"] = 2*batch["target_imgs"]-1
     # parse batch
     # collapse K dimension into batch dimension (no concatenation happening)
+    batch["prompt"] = [cap[0] for cap in batch["prompt"]]
     prompt = collapse_prompt_to_batch_dim(batch["prompt"], model_config.n_input_images)
+   
+    
     _, pose = collapse_tensor_to_batch_dim(batch["pose"])
     _, K = collapse_tensor_to_batch_dim(batch["K"])
     _, intensity_stats = collapse_tensor_to_batch_dim(batch["intensity_stats"])
@@ -810,7 +827,8 @@ def test_step(
         known_images = known_images.to(pipeline.device)
         known_images = known_images.squeeze(1)
     else:
-        known_images = None
+        # instruct pix2pix
+        known_images = batch["images"]
 
     pose = pose.to(pipeline.device)
     K = K.to(pipeline.device)

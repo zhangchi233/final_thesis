@@ -757,6 +757,7 @@ def load_checkpoint(finetune_config: FinetuneConfig, accelerator: Accelerator, n
         dirs = [d for d in dirs if d.startswith("checkpoint")]
         dirs = sorted(dirs, key=lambda x: int(x.split("-")[1]))
         path = os.path.join(finetune_config.io.output_dir, dirs[-1]) if len(dirs) > 0 else None
+        print("load from path:", path)
 
     if path is None:
         accelerator.print(

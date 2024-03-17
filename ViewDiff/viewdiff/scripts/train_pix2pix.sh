@@ -44,7 +44,6 @@ python -m accelerate.commands.launch \
   --finetune-config.model.pose_cond_coord_space absolute \
   --finetune-config.model.pose_cond_lora_rank 64 \
   --finetune-config.model.n_input_images 3 \
-  --finetune-config.io. 1 \
   --dataset-config.root-dir /workspace/mvs_training/dtu \
   --dataset-config.threshold 4.7 \
   --dataset-config.split train \

@@ -735,7 +735,7 @@ def test_step(
     cfa_config: CrossFrameAttentionConfig,
     io_config: IOConfig,
     orig_hw,
-    guidance_scale: float = 7.5,
+    guidance_scale: float = -1,
     generator=None,
     prefix: str = None,
     global_step: int = 0,

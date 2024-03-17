@@ -30,7 +30,7 @@ from diffusers.configuration_utils import FrozenDict
 from diffusers.image_processor import VaeImageProcessor
 from diffusers.loaders import FromSingleFileMixin, LoraLoaderMixin, TextualInversionLoaderMixin
 from diffusers.models import AutoencoderKL
-from diffusers.schedulers import KarrasDiffusionSchedulers
+from diffusers.schedulers import KarrasDiffusionSchedulers,EulerAncestralDiscreteScheduler
 from diffusers.utils import (
     deprecate,
     is_accelerate_available,
@@ -141,7 +141,7 @@ class CustomInstructPix2pixDiffusionPipeline(
         text_encoder: CLIPTextModel,
         tokenizer: CLIPTokenizer,
         unet: UNet2DConditionCrossFrameInExistingAttnModel,
-        scheduler: KarrasDiffusionSchedulers,
+        scheduler: EulerAncestralDiscreteScheduler,
         safety_checker: StableDiffusionSafetyChecker,
         feature_extractor: CLIPImageProcessor,
         requires_safety_checker: bool = True,
@@ -542,7 +542,58 @@ class CustomInstructPix2pixDiffusionPipeline(
         # scale the initial noise by the standard deviation required by the scheduler
         latents = latents * self.scheduler.init_noise_sigma
         return latents
+    @staticmethod
+    def retrieve_latents(
+    encoder_output: torch.Tensor, generator: Optional[torch.Generator] = None, sample_mode: str = "sample"
+):
+        if hasattr(encoder_output, "latent_dist") and sample_mode == "sample":
+            return encoder_output.latent_dist.sample(generator)
+        elif hasattr(encoder_output, "latent_dist") and sample_mode == "argmax":
+            return encoder_output.latent_dist.mode()
+        elif hasattr(encoder_output, "latents"):
+            return encoder_output.latents
+        else:
+            raise AttributeError("Could not access latents of provided encoder_output")
+    def prepare_image_latents(
+        self, image, batch_size, num_images_per_prompt, dtype, device, do_classifier_free_guidance, generator=None
+    ):
+        if not isinstance(image, (torch.Tensor, PIL.Image.Image, list)):
+            raise ValueError(
+                f"`image` has to be of type `torch.Tensor`, `PIL.Image.Image` or list but is {type(image)}"
+            )
 
+        image = image.to(device=device, dtype=dtype)
+
+        batch_size = batch_size * num_images_per_prompt
+
+        if image.shape[1] == 4:
+            image_latents = image
+        else:
+            image_latents = self.retrieve_latents(self.vae.encode(image))
+
+        if batch_size > image_latents.shape[0] and batch_size % image_latents.shape[0] == 0:
+            # expand image_latents for batch_size
+            deprecation_message = (
+                f"You have passed {batch_size} text prompts (`prompt`), but only {image_latents.shape[0]} initial"
+                " images (`image`). Initial images are now duplicating to match the number of text prompts. Note"
+                " that this behavior is deprecated and will be removed in a version 1.0.0. Please make sure to update"
+                " your script to pass as many initial images as text prompts to suppress this warning."
+            )
+            deprecate("len(prompt) != len(image)", "1.0.0", deprecation_message, standard_warn=False)
+            additional_image_per_prompt = batch_size // image_latents.shape[0]
+            image_latents = torch.cat([image_latents] * additional_image_per_prompt, dim=0)
+        elif batch_size > image_latents.shape[0] and batch_size % image_latents.shape[0] != 0:
+            raise ValueError(
+                f"Cannot duplicate `image` of batch size {image_latents.shape[0]} to {batch_size} text prompts."
+            )
+        else:
+            image_latents = torch.cat([image_latents], dim=0)
+
+        if do_classifier_free_guidance:
+            uncond_image_latents = torch.zeros_like(image_latents)
+            image_latents = torch.cat([image_latents, image_latents, uncond_image_latents], dim=0)
+
+        return image_latents
     def _encode_vae_image(self, image: torch.Tensor, generator: torch.Generator):
         if isinstance(generator, list):
             image_latents = [
@@ -566,7 +617,7 @@ class CustomInstructPix2pixDiffusionPipeline(
         height: Optional[int] = None,
         width: Optional[int] = None,
         num_inference_steps: int = 50,
-        guidance_scale: float = 7.5,
+        guidance_scale: float = -1,
         negative_prompt: Optional[Union[str, List[str]]] = None,
         num_images_per_prompt: Optional[int] = 1,
         eta: float = 0.0,
@@ -683,13 +734,22 @@ class CustomInstructPix2pixDiffusionPipeline(
             negative_prompt_embeds=negative_prompt_embeds,
             lora_scale=text_encoder_lora_scale,
         )
+        image_latents = self.prepare_image_latents(
+            known_images,
+            batch_size,
+            num_images_per_prompt,
+            prompt_embeds.dtype,
+            device,
+            do_classifier_free_guidance,
+        )
 
         # 4. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps, device=device)
         timesteps = self.scheduler.timesteps
 
         # 5. Prepare latent variables
-        num_channels_latents = self.unet.config.in_channels
+       
+        num_channels_latents = self.vae.config.latent_channels
         latents = self.prepare_latents(
             batch_size * num_images_per_prompt,
             num_channels_latents,
@@ -700,6 +760,8 @@ class CustomInstructPix2pixDiffusionPipeline(
             generator,
             latents,
         )
+
+        
 
         # 5.a check if known_images are provided as input
         n_known_images = 0
@@ -720,8 +782,9 @@ class CustomInstructPix2pixDiffusionPipeline(
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = torch.cat([latents] * 3) if do_classifier_free_guidance else latents
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
+                scaled_latent_model_input = torch.cat([scaled_latent_model_input, image_latents], dim=1)
 
                 # predict the noise residual
                 output = self.unet(
