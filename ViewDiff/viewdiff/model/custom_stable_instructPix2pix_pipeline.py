@@ -92,6 +92,7 @@ class CustomStableDiffusionPipelineOutput(BaseOutput):
     """
 
     images: Union[List[List[PIL.Image.Image]], np.ndarray]
+    target_imgs: Union[List[List[PIL.Image.Image]], np.ndarray]
     nsfw_content_detected: Optional[List[List[bool]]]
     rendered_depth: List[List[torch.FloatTensor]] = None
     rendered_mask: List[List[torch.FloatTensor]] = None
@@ -784,7 +785,7 @@ class CustomInstructPix2pixDiffusionPipeline(
                 # expand the latents if we are doing classifier free guidance
                 latent_model_input = torch.cat([latents] * 3) if do_classifier_free_guidance else latents
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
-                scaled_latent_model_input = torch.cat([scaled_latent_model_input, image_latents], dim=1)
+                latent_model_input = torch.cat([latent_model_input, image_latents], dim=1)
 
                 # predict the noise residual
                 output = self.unet(
@@ -849,7 +850,7 @@ class CustomInstructPix2pixDiffusionPipeline(
             do_denormalize = [not has_nsfw for has_nsfw in has_nsfw_concept]
 
         image = self.image_processor.postprocess(image, output_type=output_type, do_denormalize=do_denormalize)
-
+        known_images = self.image_processor.postprocess(known_images, output_type=output_type, do_denormalize=do_denormalize)
         # Offload last model to CPU
         if hasattr(self, "final_offload_hook") and self.final_offload_hook is not None:
             self.final_offload_hook.offload()
@@ -858,6 +859,7 @@ class CustomInstructPix2pixDiffusionPipeline(
             return (image, has_nsfw_concept, rendered_depth_per_layer_list, rendered_mask_per_layer_list)
 
         return CustomStableDiffusionPipelineOutput(
+            target_imgs = known_images
             images=image,
             nsfw_content_detected=has_nsfw_concept,
             rendered_depth=rendered_depth_per_layer_list,
