@@ -5,7 +5,7 @@
 python -m accelerate.commands.launch \
   /workspace/ViewDiff/viewdiff/train_pix2pix.py \
   --finetune-config.io.pretrained_model_name_or_path timbrooks/instruct-pix2pix \
-  --finetune-config.io.output_dir /workspace/ViewDiff/output \
+  --finetune-config.io.output_dir /workspace/ViewDiff/output_var \
   --finetune-config.io.experiment_name train_teddybear \
   --finetune-config.training.mixed_precision no \
   --finetune-config.training.dataloader_num_workers 4 \
@@ -45,10 +45,10 @@ python -m accelerate.commands.launch \
   --finetune-config.model.pose_cond_lora_rank 64 \
   --finetune-config.model.n_input_images 3 \
   --dataset-config.root-dir /workspace/mvs_training/dtu \
-  --dataset-config.threshold 4.7 \
+  --dataset-config.threshold 0.8 \
   --dataset-config.split train \
   --dataset-config.img_wh 512\
   --validation-dataset-config.root-dir /workspace/mvs_training/dtu \
   --validation-dataset-config.split val \
-  --validation-dataset-config.threshold 4.7\
+  --validation-dataset-config.threshold 0.8\
 

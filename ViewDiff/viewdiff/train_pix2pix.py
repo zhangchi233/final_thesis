@@ -160,8 +160,7 @@ def train_and_test(
         unet,
         train_dreambooth_dataloader=train_dreambooth_dataloader
     )
-    if accelerator.is_main_process:
-        validation_batch = next(iter(validation_dataloader))  # always use fixed validation_batch
+    
     if train_dreambooth_dataloader is not None:
         train_dreambooth_dataloader_iter = iter(train_dreambooth_dataloader)
         dreambooth_iter_sentinel = object()
@@ -200,6 +199,9 @@ def train_and_test(
         first_epoch_use_different_dataloader = True
         first_epoch_train_dataloader = skip_first_batches(dataloader=train_dataloader, num_batches=resume_step)
         progress_bar.update(resume_step // finetune_config.optimizer.gradient_accumulation_steps)
+    
+    # iteration validation dataloader
+    validation_iter = iter(validation_dataloader)
 
     for epoch in range(first_epoch, finetune_config.training.num_train_epochs):
 
@@ -209,48 +211,61 @@ def train_and_test(
         # ################
         # Val Loop
         # ################
+        
         unet.eval()
         update_vol_rend_inject_noise_sigma(accelerator.unwrap_model(unet), 0.0)  # disable vol-rend noise
         update_n_novel_images(accelerator.unwrap_model(unet), 0)  # disable skipping frame in inference mode
         torch.cuda.empty_cache()
+        logger.info(f"Running validation...")
+        # create pipeline
+        if finetune_config.model.use_ema:
+            # Store the UNet parameters temporarily and load the EMA parameters to perform inference.
+            ema_unet.store(unet.parameters())
+            ema_unet.copy_to(unet.parameters())
+        # The models need unwrapping because for compatibility in distributed training mode.
+        pipeline = CustomInstructPix2pixDiffusionPipeline.from_pretrained(
+            finetune_config.io.pretrained_model_name_or_path,
+            unet=accelerator.unwrap_model(unet),
+            text_encoder=accelerator.unwrap_model(text_encoder),
+            vae=accelerator.unwrap_model(vae),
+            revision=finetune_config.io.revision,
+            torch_dtype=weight_dtype,
+        )
+        pipeline = pipeline.to(accelerator.device)
+        pipeline.set_progress_bar_config(disable=False)
+        pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(pipeline.scheduler.config)
+        pipeline.scheduler.config.prediction_type = finetune_config.training.noise_prediction_type
         if (
             accelerator.is_main_process
             and finetune_config.training.validation_epochs > 0
             and (epoch % finetune_config.training.validation_epochs) == 0
         ):
-            logger.info(f"Running validation...")
-            # create pipeline
-            if finetune_config.model.use_ema:
-                # Store the UNet parameters temporarily and load the EMA parameters to perform inference.
-                ema_unet.store(unet.parameters())
-                ema_unet.copy_to(unet.parameters())
-            # The models need unwrapping because for compatibility in distributed training mode.
-            pipeline = CustomInstructPix2pixDiffusionPipeline.from_pretrained(
-                finetune_config.io.pretrained_model_name_or_path,
-                unet=accelerator.unwrap_model(unet),
-                text_encoder=accelerator.unwrap_model(text_encoder),
-                vae=accelerator.unwrap_model(vae),
-                revision=finetune_config.io.revision,
-                torch_dtype=weight_dtype,
-            )
-            pipeline = pipeline.to(accelerator.device)
-            pipeline.set_progress_bar_config(disable=False)
-            pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(pipeline.scheduler.config)
-            pipeline.scheduler.config.prediction_type = finetune_config.training.noise_prediction_type
+            for i in range(10):
+                
+                # in case the validation dataloader is exhausted, restart it
+                try:
+                    validation_batch = next(validation_iter)  # always use fixed validation_batch
+                except:
+                    validation_iter = iter(validation_dataloader)
+                    validation_batch = next(validation_iter) 
+                
+                
 
-            # run inference on one batch of the validation set
-            test_step(
-                pipeline=pipeline,
-                batch=validation_batch,
-                model_config=finetune_config.model,
-                cfa_config=finetune_config.cross_frame_attention,
-                io_config=finetune_config.io,
-                generator=generator,
-                prefix="Validation",
-                global_step=global_step,
-                writer=accelerator.trackers[0].writer,
-                orig_hw=(validation_dataset_config.batch.image_height, validation_dataset_config.batch.image_width),
-            )
+                # run inference on one batch of the validation set
+                
+                test_step(
+                    pipeline=pipeline,
+                    batch=validation_batch,
+                    model_config=finetune_config.model,
+                    cfa_config=finetune_config.cross_frame_attention,
+                    io_config=finetune_config.io,
+                    generator=generator,
+                    prefix="Validation",
+                    global_step=global_step,
+                    writer=accelerator.trackers[0].writer,
+                    orig_hw=(validation_dataset_config.batch.image_height, validation_dataset_config.batch.image_width),
+                )
+                global_step+=1
 
             if finetune_config.model.use_ema:
                 # Switch back to the original UNet parameters.
@@ -828,6 +843,7 @@ def test_step(
         known_images = known_images.squeeze(1)
     else:
         # instruct pix2pix
+        assert batch_size == 1, "sliding window currently only supported for batch-size 1"
         _, known_images = collapse_tensor_to_batch_dim(batch["images"])
         known_images = known_images.to(pipeline.device)
         known_images = known_images.squeeze(1)

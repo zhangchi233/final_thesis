@@ -88,7 +88,7 @@ class BatchConfig:
     n_parallel_images: int = 3
     """How many images of the same sequence are selected in one batch (used for multi-view supervision)."""
 
-    image_width: int = 640
+    image_width: int = 512
     """The desired image width after applying all augmentations (e.g. crop) and resizing operations."""
 
     image_height: int = 512
@@ -193,7 +193,7 @@ class DTUDataset(Dataset):
         self.split = config.split
         assert self.split in ['train', 'val', 'test'], \
             'split must be either "train", "val" or "test"!'
-        self.img_wh = config.img_wh
+        self.img_wh = (config.batch.image_height,config.batch.image_width)
         if config.img_wh is not None:
             if type(config.img_wh) is int:
                 self.img_wh = (config.img_wh, config.img_wh)
@@ -254,7 +254,7 @@ class DTUDataset(Dataset):
                     for light_idx in light_idxs:
                         output_key = f"{scan}_{ref_view}_{src_views[0]}_{src_views[1]}"
                         losses = self.output_pkl[output_key]
-                        if losses[light_idx] > self.threshold:
+                        if abs(np.argmin(losses)-light_idx)>=2 :
                             
                             self.metas += [(scan, ref_view,light_idx, src_views)]
                          
@@ -399,7 +399,8 @@ class DTUDataset(Dataset):
         Rs = []
         intensity_stats =[]
         prompt = str(np.random.choice(self.prompt_dir[scan][str(ref_view)],1)[0])
-        sample['prompt'] = [prompt]
+        change_light = target_light - light_idx
+        sample['prompt'] = [f"modify the lightness of image by {change_light} scale"]
         for i, vid in enumerate(view_ids):
         # NOTE that the id in image file names is from 1 to 49 (not 0~48)
         
@@ -467,9 +468,12 @@ class DTUDataset(Dataset):
         sample['proj_mats'] = proj_mats
         sample['depth_interval'] = torch.FloatTensor([self.depth_interval])
         sample['scan_vid'] = (scan, ref_view)
+        
 
         sample['target_imgs'] = target_imgs
         sample["bbox"] =torch.tensor([[-1, -1, -1], [1, 1, 1]], dtype=torch.float32)
+
+
 
         return sample
 

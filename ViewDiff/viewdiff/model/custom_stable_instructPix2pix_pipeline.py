@@ -859,7 +859,7 @@ class CustomInstructPix2pixDiffusionPipeline(
             return (image, has_nsfw_concept, rendered_depth_per_layer_list, rendered_mask_per_layer_list)
 
         return CustomStableDiffusionPipelineOutput(
-            target_imgs = known_images
+            target_imgs = known_images,
             images=image,
             nsfw_content_detected=has_nsfw_concept,
             rendered_depth=rendered_depth_per_layer_list,
