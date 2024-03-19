@@ -254,9 +254,9 @@ class DTUDataset(Dataset):
                     for light_idx in light_idxs:
                         output_key = f"{scan}_{ref_view}_{src_views[0]}_{src_views[1]}"
                         losses = self.output_pkl[output_key]
-                        if abs(np.argmin(losses)-light_idx)>=2 :
+                        if abs(np.argmin(losses)-light_idx)>4 :
                             
-                            self.metas += [(scan, ref_view,light_idx, src_views)]
+                            self.metas += [(scan, ref_view,light_idx, src_views,int(np.argmin(losses)))]
                          
     def build_proj_mats(self):
         proj_mats = []
@@ -376,17 +376,17 @@ class DTUDataset(Dataset):
 
     def  __getitem__(self, idx):
        
-        scan, ref_view,light_idx, src_views = self.metas[idx]
+        scan, ref_view,light_idx, src_views,target_light = self.metas[idx]
         # use only the reference view and first nviews-1 source views
         view_ids = [ref_view] + src_views[:self.n_views-1]
 
-        output_key = f"{scan}_{ref_view}_{src_views[0]}_{src_views[1]}"
-        if self.total_pkl:
-            target_light = self.total_pkl[scan]
-            target_light = np.argmin(target_light)
-        else:
-            target_light = self.output_pkl[output_key]
-            target_light = np.argmin(target_light)
+        # output_key = f"{scan}_{ref_view}_{src_views[0]}_{src_views[1]}"
+        # if self.total_pkl:
+        #     target_light = self.total_pkl[scan]
+        #     target_light = np.argmin(target_light)
+        # else:
+        #     target_light = self.output_pkl[output_key]
+        #     target_light = np.argmin(target_light)
 
         
 
@@ -400,7 +400,7 @@ class DTUDataset(Dataset):
         intensity_stats =[]
         prompt = str(np.random.choice(self.prompt_dir[scan][str(ref_view)],1)[0])
         change_light = target_light - light_idx
-        sample['prompt'] = [f"modify the lightness of image by {change_light} scale"]
+        sample['prompt'] = [f"modify the lightness of image to light_class_{target_light} style"]
         for i, vid in enumerate(view_ids):
         # NOTE that the id in image file names is from 1 to 49 (not 0~48)
         
@@ -458,7 +458,7 @@ class DTUDataset(Dataset):
         
         imgs = self.unpreprocess(imgs)
         target_imgs = self.unpreprocess(target_imgs)
-        
+       
         Ks = np.stack(Ks)
         Rs = np.stack(Rs)
         sample['pose'] = Rs

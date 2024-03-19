@@ -240,7 +240,7 @@ def train_and_test(
             and finetune_config.training.validation_epochs > 0
             and (epoch % finetune_config.training.validation_epochs) == 0
         ):
-            for i in range(1):
+            for i in range(10):
                 
                 # in case the validation dataloader is exhausted, restart it
                 try:
@@ -836,7 +836,7 @@ def test_step(
     batch_size = len(batch["prompt"])
 
     batch["images"] = 2*batch["images"]-1
-    batch["target_imgs"] = 2*batch["target_imgs"]-1
+    batch["images"] = 2*batch["target_imgs"]-1
     # parse batch
     # collapse K dimension into batch dimension (no concatenation happening)
     batch["prompt"] = [cap[0] for cap in batch["prompt"]]

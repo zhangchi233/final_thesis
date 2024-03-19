@@ -63,15 +63,19 @@ EXAMPLE_DOC_STRING = """
 """
 
 
-def rescale_noise_cfg(noise_cfg, noise_pred_text, guidance_rescale=0.0):
+def rescale_noise_cfg(noise_cfg, noise_pred_text,noise_pred_image, guidance_rescale=0.0,image_guidance_scale=0.0):
     """
     Rescale `noise_cfg` according to `guidance_rescale`. Based on findings of [Common Diffusion Noise Schedules and
     Sample Steps are Flawed](https://arxiv.org/pdf/2305.08891.pdf). See Section 3.4
     """
     std_text = noise_pred_text.std(dim=list(range(1, noise_pred_text.ndim)), keepdim=True)
+    std_image = noise_pred_image.std(dim=list(range(1, noise_pred_image.ndim)), keepdim=True)
+
+
+
     std_cfg = noise_cfg.std(dim=list(range(1, noise_cfg.ndim)), keepdim=True)
     # rescale the results from guidance (fixes overexposure)
-    noise_pred_rescaled = noise_cfg * (std_text / std_cfg)
+    noise_pred_rescaled = noise_cfg * ((std_text +std_image)/ (2*std_cfg))
     # mix with the original results from guidance by factor guidance_rescale to avoid "plain looking" images
     noise_cfg = guidance_rescale * noise_pred_rescaled + (1 - guidance_rescale) * noise_cfg
     return noise_cfg
@@ -431,7 +435,8 @@ class CustomInstructPix2pixDiffusionPipeline(
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch
             # to avoid doing two forward passes
-            prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds])
+            # unlike other order
+            prompt_embeds = torch.cat([prompt_embeds, negative_prompt_embeds, negative_prompt_embeds])
 
         return prompt_embeds
 
@@ -618,7 +623,8 @@ class CustomInstructPix2pixDiffusionPipeline(
         height: Optional[int] = None,
         width: Optional[int] = None,
         num_inference_steps: int = 50,
-        guidance_scale: float = -1,
+        guidance_scale: float = 2.5,
+        image_guidance_scale: float = 7.5,
         negative_prompt: Optional[Union[str, List[str]]] = None,
         num_images_per_prompt: Optional[int] = 1,
         eta: float = 0.0,
@@ -719,7 +725,14 @@ class CustomInstructPix2pixDiffusionPipeline(
         # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
         # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
         # corresponds to doing no classifier free guidance.
-        do_classifier_free_guidance = guidance_scale > 1.0
+        do_classifier_free_guidance = guidance_scale > 1.0 or image_guidance_scale>1.0
+        print(f"conduct do_classifier_free_guidance, text_guidance: {guidance_scale},"
+               f"image_guidance: {image_guidance_scale}")
+        if do_classifier_free_guidance:
+            # make sure that `guidance_scale` is always greater than `1` to avoid
+            # numerical instability in the classifier free guidance
+            guidance_scale = max(guidance_scale, 0.0)
+            image_guidance_scale = max(image_guidance_scale, 0.0)
 
         # 3. Encode input prompt
         text_encoder_lora_scale = (
@@ -801,12 +814,16 @@ class CustomInstructPix2pixDiffusionPipeline(
 
                 # perform guidance
                 if do_classifier_free_guidance:
-                    noise_pred_uncond, noise_pred_text = model_pred.chunk(2)
-                    model_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
+                    noise_pred_text, noise_pred_image, noise_pred_uncond = model_pred.chunk(3)
+                    model_pred = (
+                        noise_pred_uncond
+                        + guidance_scale * (noise_pred_text - noise_pred_image)
+                        + image_guidance_scale * (noise_pred_image - noise_pred_uncond)
+                    )
 
-                if do_classifier_free_guidance and guidance_rescale > 0.0:
-                    # Based on 3.4. in https://arxiv.org/pdf/2305.08891.pdf
-                    model_pred = rescale_noise_cfg(model_pred, noise_pred_text, guidance_rescale=guidance_rescale)
+                # if do_classifier_free_guidance and guidance_rescale > 0.0:
+                #     # Based on 3.4. in https://arxiv.org/pdf/2305.08891.pdf
+                #     model_pred = rescale_noise_cfg(model_pred, noise_pred_text,noise_pred_image, guidance_rescale=0.0)
 
                 # compute the previous noisy sample x_t -> x_t-1
                 if known_images is not None:

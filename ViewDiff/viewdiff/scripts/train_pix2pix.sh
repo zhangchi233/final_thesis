@@ -5,8 +5,9 @@
 python -m accelerate.commands.launch \
   /workspace/ViewDiff/viewdiff/train_pix2pix.py \
   --finetune-config.io.pretrained_model_name_or_path timbrooks/instruct-pix2pix \
-  --finetune-config.io.output_dir /workspace/ViewDiff/output_var \
+  --finetune-config.io.output_dir /workspace/ViewDiff/output_var_second \
   --finetune-config.io.experiment_name train_teddybear \
+  --finetune-config.io.resume_from_checkpoint "latest" \
   --finetune-config.training.mixed_precision no \
   --finetune-config.training.dataloader_num_workers 4 \
   --finetune-config.training.num_train_epochs 50 \
@@ -17,7 +18,7 @@ python -m accelerate.commands.launch \
   --finetune_config.training.max_num_images_not_noisy 2 \
   --finetune_config.training.validation_epochs 1 \
   --finetune_config.training.dreambooth_prior_preservation_every_nth -1 \
-  --finetune-config.optimizer.learning_rate 5e-5 \
+  --finetune-config.optimizer.learning_rate 1e-4 \
   --finetune-config.optimizer.vol_rend_learning_rate 1e-3 \
   --finetune-config.optimizer.vol_rend_adam_weight_decay 0.0 \
   --finetune-config.optimizer.gradient_accumulation_steps 1 \
@@ -37,7 +38,7 @@ python -m accelerate.commands.launch \
   --finetune-config.cross_frame_attention.vol_rend_proj_in_mode multiple \
   --finetune-config.cross_frame_attention.vol_rend_proj_out_mode multiple \
   --finetune-config.cross_frame_attention.vol_rend_aggregator_mode ibrnet \
-  --finetune-config.cross_frame_attention.last_layer_mode no_residual_connection \
+  --finetune-config.cross_frame_attention.last_layer_mode zero-conv \
   --finetune_config.cross_frame_attention.vol_rend_model_background \
   --finetune_config.cross_frame_attention.vol_rend_background_grid_percentage 0.5 \
   --finetune-config.model.pose_cond_mode sa-ca \

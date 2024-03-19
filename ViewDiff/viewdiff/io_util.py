@@ -73,7 +73,7 @@ class IOConfig:
     checkpoints_total_limit: int = 2
     """Max number of checkpoints to store."""
 
-    resume_from_checkpoint: Optional[str] = False
+    resume_from_checkpoint: Optional[str] = "latest"
     """Whether training should be resumed from a previous checkpoint. Use a path saved by
         ' `--checkpointing_steps`, or `"latest"` to automatically select the last available checkpoint."""
 
@@ -376,7 +376,8 @@ def save_inference_outputs(
 
     for n in range(N):
         if io_config.save.pred_files:
-            file_name = f"val_step_{step:04d}_{n}.png"
+            prompt = batch["prompt"][n]
+            file_name = f"{prompt}_val_step_{step:04d}_{n}.png"
             pred_img = output.images[n].detach().cpu()
             
             conditional_img = batch["images"][n].detach().cpu()
@@ -388,7 +389,7 @@ def save_inference_outputs(
         
             save_image(file_img,file_path,
                     nrow = 3)
-            print("save img to :",file_path)
+            print("save img to :",file_path,prompt)
 
         for frame_idx in range(K):
             # save the predictions using their original filenames

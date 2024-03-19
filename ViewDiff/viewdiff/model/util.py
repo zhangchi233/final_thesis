@@ -205,6 +205,7 @@ def replace_self_attention_with_cross_frame_attention(
     unet_attn_procs = {}
     unet_attn_parameters = []
     for info in infos:
+        
         if info["is_self_attention"]:
             module = CrossFrameAttentionProcessor2_0(
                 n_input_images=n_input_images,
