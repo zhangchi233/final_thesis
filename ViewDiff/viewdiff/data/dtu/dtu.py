@@ -1,6 +1,6 @@
 from torch.utils.data import Dataset
 import sys
-sys.path.append('/workspace/project/dp_simple/')
+sys.path.append('/root/autodl-tmp/project/dp_simple/')
 from CasMVSNet_pl.datasets.utils import read_pfm
 import os
 import numpy as np
@@ -61,7 +61,7 @@ class DatasetArgsConfig:
             from the foreground region of the loaded segmentation mask; masks
             and depth maps are cropped accordingly; cameras are corrected."""
 
-    image_width: Optional[int] = 640
+    image_width: Optional[int] = 512
     """The width of the returned images, masks, and depth maps;
             aspect ratio is preserved during cropping/resizing."""
 
@@ -172,8 +172,8 @@ class DTUConfig:
     split: Optional[str] = None
     """Must be specified if --subset is specified. Tells which split to use from the subset."""
 
-    root_dir: str = "/workspace/mvs_training/dtu/"
-
+    root_dir: str = "/root/autodl-tmp/mvs_training/dtu/"
+    target_light = 6
     n_views:int=3 
     levels:int=3 
     depth_interval:int =2.65
@@ -181,7 +181,7 @@ class DTUConfig:
     abs_error:Optional[str] ="abs"
     output_total:Optional[bool]=False
     threshold: Optional[int] = 4.7
-    prompt_dir: Optional[str] = "/workspace/mvs_training/dtu/co3d_blip2_captions_final.json"
+    prompt_dir: Optional[str] = "/root/autodl-tmp/mvs_training/dtu/co3d_blip2_captions_final.json"
 
 class DTUDataset(Dataset):
     def __init__(self, config: DTUConfig):
@@ -193,12 +193,16 @@ class DTUDataset(Dataset):
         self.split = config.split
         assert self.split in ['train', 'val', 'test'], \
             'split must be either "train", "val" or "test"!'
-        self.img_wh = (config.batch.image_height,config.batch.image_width)
+        
+        
+        self.light_class = config.target_light
+        self.img_wh = (config.batch.image_width, config.batch.image_height)
         if config.img_wh is not None:
             if type(config.img_wh) is int:
                 self.img_wh = (config.img_wh, config.img_wh)
             assert self.img_wh[0]%32==0 and self.img_wh[1]%32==0, \
                 'img_wh must both be multiples of 32!'
+        
         self.threshold = config.threshold
         self.build_metas()
         self.n_views = config.n_views
@@ -219,9 +223,9 @@ class DTUDataset(Dataset):
         
     def build_metas(self):
         self.metas = []
-        with open(f'/workspace/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}.txt') as f:
+        with open(f'/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}.txt') as f:
             self.scans = [line.rstrip() for line in f.readlines()]
-        output_pkl = f'/workspace/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}_abs.pkl'
+        output_pkl = f'/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}_abs.pkl'
         import pickle
         with open(output_pkl, 'rb') as f:
             self.output_pkl = pickle.load(f)
@@ -254,9 +258,16 @@ class DTUDataset(Dataset):
                     for light_idx in light_idxs:
                         output_key = f"{scan}_{ref_view}_{src_views[0]}_{src_views[1]}"
                         losses = self.output_pkl[output_key]
-                        if abs(np.argmin(losses)-light_idx)>4 :
-                            
+                        if np.argmin(losses)==self.light_class and self.split=="train":
                             self.metas += [(scan, ref_view,light_idx, src_views,int(np.argmin(losses)))]
+                        elif self.split!="train":
+                            if light_idx!=0 or scan !="scan106":
+                                continue
+                            else:
+                                self.metas += [(scan, ref_view,light_idx, src_views,int(np.argmin(losses)))]
+                                
+                                
+                           
                          
     def build_proj_mats(self):
         proj_mats = []
@@ -399,15 +410,15 @@ class DTUDataset(Dataset):
         Rs = []
         intensity_stats =[]
         prompt = str(np.random.choice(self.prompt_dir[scan][str(ref_view)],1)[0])
-        change_light = target_light - light_idx
-        sample['prompt'] = [f"modify the lightness of image to light_class_{target_light} style"]
+         
+        sample['prompt'] = [f"modify the lightness of image to light_class_{self.light_class} style"]
         for i, vid in enumerate(view_ids):
         # NOTE that the id in image file names is from 1 to 49 (not 0~48)
         
             img_filename = os.path.join(self.root_dir,
                             f'Rectified/{scan}_train/rect_{vid+1:03d}_{light_idx}_r5000.png')
             target_filename = os.path.join(self.root_dir,
-                            f'Rectified/{scan}_train/rect_{vid+1:03d}_{target_light}_r5000.png')
+                            f'Rectified/{scan}_train/rect_{vid+1:03d}_{self.light_class}_r5000.png')
             mask_filename = os.path.join(self.root_dir,
                             f'Depths/{scan}/depth_visual_{vid:04d}.png')
             depth_filename = os.path.join(self.root_dir,
@@ -453,11 +464,14 @@ class DTUDataset(Dataset):
     
     
         imgs = torch.stack(imgs) # (V, 3, H, W)
+        
         target_imgs = torch.stack(target_imgs)
         proj_mats = torch.stack(proj_mats)[:,:,:3] # (V-1, self.levels, 3, 4) from fine to coarse
         
         imgs = self.unpreprocess(imgs)
         target_imgs = self.unpreprocess(target_imgs)
+        
+        imgs[imgs<0.2] = 0
        
         Ks = np.stack(Ks)
         Rs = np.stack(Rs)

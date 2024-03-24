@@ -821,8 +821,8 @@ def test_step(
     cfa_config: CrossFrameAttentionConfig,
     io_config: IOConfig,
     orig_hw,
-    guidance_scale: float = 15,
-    image_guidance_scale: float = 1.5,
+    guidance_scale: float = 16,
+    image_guidance_scale: float = 1,
     generator=None,
     prefix: str = None,
     global_step: int = 0,
@@ -860,6 +860,7 @@ def test_step(
         _, known_images = collapse_tensor_to_batch_dim(batch["images"])
         known_images = known_images.to(pipeline.device)
         known_images = known_images.squeeze(1)
+        print(known_images.shape)
 
     pose = pose.to(pipeline.device)
     K = K.to(pipeline.device)

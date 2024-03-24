@@ -731,8 +731,8 @@ class CustomInstructPix2pixDiffusionPipeline(
         if do_classifier_free_guidance:
             # make sure that `guidance_scale` is always greater than `1` to avoid
             # numerical instability in the classifier free guidance
-            guidance_scale = max(guidance_scale, 0.0)
-            image_guidance_scale = max(image_guidance_scale, 0.0)
+            guidance_scale = max(guidance_scale, 1.0)
+            image_guidance_scale = max(image_guidance_scale, 1.0)
 
         # 3. Encode input prompt
         text_encoder_lora_scale = (
@@ -748,6 +748,7 @@ class CustomInstructPix2pixDiffusionPipeline(
             negative_prompt_embeds=negative_prompt_embeds,
             lora_scale=text_encoder_lora_scale,
         )
+        
         image_latents = self.prepare_image_latents(
             known_images,
             batch_size,
@@ -779,10 +780,10 @@ class CustomInstructPix2pixDiffusionPipeline(
 
         # 5.a check if known_images are provided as input
         n_known_images = 0
-        if known_images is not None:
-            n_known_images = known_images.shape[0]
-            known_image_latents = self._encode_vae_image(image=known_images, generator=generator)
-            latents[:n_known_images] = known_image_latents
+        # if known_images is not None:
+        #     n_known_images = known_images.shape[0]
+        #     known_image_latents = self._encode_vae_image(image=known_images, generator=generator)
+        #     latents[:n_known_images] = known_image_latents
 
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
@@ -856,16 +857,17 @@ class CustomInstructPix2pixDiffusionPipeline(
             # with torch.no_grad(), torch.amp.autocast("cuda"):
             #     image = self.consistency_decoder(latents / self.vae.config.scaling_factor, schedule=[1.0, 0.5])
             #     torch.cuda.empty_cache()
-            image, has_nsfw_concept = self.run_safety_checker(image, device, prompt_embeds.dtype)
+            # image, has_nsfw_concept = self.run_safety_checker(image, device, prompt_embeds.dtype)
         else:
             image = latents
             has_nsfw_concept = None
 
-        if has_nsfw_concept is None:
-            do_denormalize = [True] * image.shape[0]
-        else:
-            do_denormalize = [not has_nsfw for has_nsfw in has_nsfw_concept]
-
+        # if has_nsfw_concept is None:
+        #     do_denormalize = [True] * image.shape[0]
+        # else:
+        #     do_denormalize = [not has_nsfw for has_nsfw in has_nsfw_concept]
+        do_denormalize = [True] * image.shape[0]
+        has_nsfw_concept = [False] * image.shape[0]
         image = self.image_processor.postprocess(image, output_type=output_type, do_denormalize=do_denormalize)
         known_images = self.image_processor.postprocess(known_images, output_type=output_type, do_denormalize=do_denormalize)
         # Offload last model to CPU
