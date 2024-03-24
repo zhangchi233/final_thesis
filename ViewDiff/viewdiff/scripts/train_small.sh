@@ -8,7 +8,7 @@ accelerate launch --mixed_precision="no" -m viewdiff.train \
 --finetune-config.io.output_dir $3 \
 --finetune-config.io.experiment_name "train_teddybear" \
 --finetune-config.training.mixed_precision "no" \
---finetune-config.training.dataloader_num_workers "1" \
+--finetune-config.training.dataloader_num_workers "0" \
 --finetune-config.training.num_train_epochs "1000" \
 --finetune-config.training.train_batch_size "1" \
 --finetune-config.training.dreambooth_prior_preservation_loss_weight "0.1" \
@@ -27,8 +27,8 @@ accelerate launch --mixed_precision="no" -m viewdiff.train \
 --finetune-config.cross_frame_attention.with_self_attention \
 --finetune-config.cross_frame_attention.use_temb_cond \
 --finetune-config.cross_frame_attention.mode "pretrained" \
---finetune-config.cross_frame_attention.n_cfa_down_blocks "0" \
---finetune-config.cross_frame_attention.n_cfa_up_blocks "0" \
+--finetune-config.cross_frame_attention.n_cfa_down_blocks "1" \
+--finetune-config.cross_frame_attention.n_cfa_up_blocks "1" \
 --finetune-config.cross_frame_attention.unproj_reproj_mode "with_cfa" \
 --finetune-config.cross_frame_attention.num_3d_layers "1" \
 --finetune-config.cross_frame_attention.dim_3d_latent "16" \

@@ -9,6 +9,7 @@ from accelerate import Accelerator
 from accelerate.utils import ProjectConfiguration
 
 from .model.custom_stable_diffusion_pipeline import CustomStableDiffusionPipeline
+from .model.custom_stable_instructPix2pix_pipeline import CustomInstructPix2pixDiffusionPipeline
 
 from .train_util import FinetuneConfig, unet_attn_processors_state_dict, load_models
 from diffusers.loaders import LoraLoaderMixin
@@ -19,7 +20,7 @@ from .train import update_model
 
 
 def convert_checkpoint_to_model(
-    checkpoint_path: str, keep_config_output_dir: bool = False, pretrained_model_name_or_path: str = "stabilityai/stable-diffusion-2-1-base"
+    checkpoint_path: str, keep_config_output_dir: bool = False, pretrained_model_name_or_path: str = "timbrooks/instruct-pix2pix"
 ):
     # load config from checkpoint_path
     if checkpoint_path[-1] == "/":
@@ -107,7 +108,7 @@ def convert_checkpoint_to_model(
         # Create the pipeline using the trained modules and save it.
         unet = accelerator.unwrap_model(unet)
 
-        pipeline = CustomStableDiffusionPipeline.from_pretrained(
+        pipeline = CustomInstructPix2pixDiffusionPipeline.from_pretrained(
             finetune_config.io.pretrained_model_name_or_path,
             text_encoder=text_encoder,
             vae=vae,
@@ -127,4 +128,4 @@ def convert_checkpoint_to_model(
 
 
 if __name__ == "__main__":
-    tyro.cli(convert_checkpoint_to_model)
+    convert_checkpoint_to_model("/root/autodl-tmp/ViewDiff/output_var_second/all/subset_all/input_3/train/class6/checkpoint-15000")
