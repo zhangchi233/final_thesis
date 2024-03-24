@@ -464,11 +464,14 @@ class DTUDataset(Dataset):
     
     
         imgs = torch.stack(imgs) # (V, 3, H, W)
+        
         target_imgs = torch.stack(target_imgs)
         proj_mats = torch.stack(proj_mats)[:,:,:3] # (V-1, self.levels, 3, 4) from fine to coarse
         
         imgs = self.unpreprocess(imgs)
         target_imgs = self.unpreprocess(target_imgs)
+        
+        imgs[imgs<0.2] = 0
        
         Ks = np.stack(Ks)
         Rs = np.stack(Rs)
