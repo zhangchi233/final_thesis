@@ -263,7 +263,7 @@ class DTUDataset(Dataset):
                     for light_idx in light_idxs:
                         output_key = f"{scan}_{ref_view}_{src_views[0]}_{src_views[1]}"
                         losses = self.output_pkl[output_key]
-                        if np.argmin(losses)==self.light_class and self.split=="train":
+                        if self.split=="train":
                             self.metas += [(scan, ref_view,light_idx, src_views,int(np.argmin(losses)))]
                         elif self.split!="train":
                             if light_idx!=0 or scan !="scan106":
@@ -396,6 +396,8 @@ class DTUDataset(Dataset):
         scan, ref_view,light_idx, src_views,target_light = self.metas[idx]
         # use only the reference view and first nviews-1 source views
         view_ids = [ref_view] + src_views[:self.n_views-1]
+        light_inputs = np.random.choice(7,len(view_ids))
+        
 
         # output_key = f"{scan}_{ref_view}_{src_views[0]}_{src_views[1]}"
         # if self.total_pkl:
@@ -420,7 +422,7 @@ class DTUDataset(Dataset):
         sample['prompt'] = [f"modify the lightness of image to light_class_{target_light} style"]
         for i, vid in enumerate(view_ids):
         # NOTE that the id in image file names is from 1 to 49 (not 0~48)
-        
+            light_idx = light_inputs[i]
             img_filename = os.path.join(self.root_dir,
                             f'Rectified/{scan}_train/rect_{vid+1:03d}_{light_idx}_r5000.png')
             target_filename = os.path.join(self.root_dir,
@@ -484,8 +486,7 @@ class DTUDataset(Dataset):
         # randomly choose half of the pixels to be zero
 
         torch.random.manual_seed(0)
-        mask = torch.rand_like(imgs) > 0.5
-        imgs[imgs<0.15] *=0
+       
        
         Ks = np.stack(Ks)
         Rs = np.stack(Rs)

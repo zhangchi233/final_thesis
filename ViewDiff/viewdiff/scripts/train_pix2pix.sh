@@ -17,7 +17,7 @@ python -m accelerate.commands.launch \
   --finetune_config.training.max_num_images_not_noisy 2 \
   --finetune_config.training.validation_epochs 1 \
   --finetune_config.training.dreambooth_prior_preservation_every_nth -1 \
-  --finetune-config.optimizer.learning_rate 1e-3 \
+  --finetune-config.optimizer.learning_rate 1e-5 \
   --finetune-config.optimizer.vol_rend_learning_rate 1e-3 \
   --finetune-config.optimizer.vol_rend_adam_weight_decay 0.0 \
   --finetune-config.optimizer.gradient_accumulation_steps 1 \
@@ -48,8 +48,8 @@ python -m accelerate.commands.launch \
   --dataset-config.threshold 0.8 \
   --dataset-config.split train \
   --dataset-config.img_wh 512\
-  --dataset-config.debug 1 \
-  --validation-dataset-config.debug 1\
+  --dataset-config.debug 0 \
+  --validation-dataset-config.debug 0\
   --validation-dataset-config.root-dir /workspace/mvs_training/dtu \
   --validation-dataset-config.split val \
   --validation-dataset-config.threshold 0.8\
