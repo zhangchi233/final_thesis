@@ -97,7 +97,7 @@ class CrossFrameAttentionConfig:
         'alpha': add them with the alpha idea from VideoLDM.
         'no_residual_connection': do not use residual connection, instead use the output directly."""
 
-    unproj_reproj_mode: Literal["none", "only_unproj_reproj", "with_cfa"] = "none"
+    unproj_reproj_mode: Literal["none", "only_unproj_reproj", "with_cfa","with_unproj_cfa"] = "none"
     """How to use unproj_reproj as layer in the model.
         "none": do not use the layer.
         "only_unproj_reproj": use the layer instead of cross-frame-attention.
