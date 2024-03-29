@@ -128,4 +128,4 @@ def convert_checkpoint_to_model(
 
 
 if __name__ == "__main__":
-    convert_checkpoint_to_model("/root/autodl-tmp/ViewDiff/output_var_second/all/subset_all/input_3/train/class6/checkpoint-15000")
+    convert_checkpoint_to_model("/root/autodl-tmp/ViewDiff/output_var_unproj/all/subset_all/input_3/train/class6/checkpoint-35000")
