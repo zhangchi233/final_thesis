@@ -468,6 +468,7 @@ class BasicTransformerWithCrossFrameAttentionBlock(BasicTransformerBlock):
             if self.use_unproj_reproj:
                 # Unproj-Reproj (after cross-frame-attention or stand-alone)
                 attn_output = self.unproj_reproj(unproj_reproj_kwargs, attn_output)
+               
 
             # normalize
             if self.use_ada_layer_norm_zero:
