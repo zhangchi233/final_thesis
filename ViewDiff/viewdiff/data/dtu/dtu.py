@@ -352,10 +352,13 @@ class DTUDataset(Dataset):
                             interpolation=cv2.INTER_NEAREST)
         mask_2 = cv2.resize(mask_1, None, fx=0.5, fy=0.5,
                             interpolation=cv2.INTER_NEAREST)
+        mask_3 = cv2.resize(mask_2, None, fx=0.5, fy=0.5,
+                            interpolation=cv2.INTER_NEAREST)
 
         masks = {"level_0": torch.BoolTensor(mask_0),
                  "level_1": torch.BoolTensor(mask_1),
-                 "level_2": torch.BoolTensor(mask_2)}
+                 "level_2": torch.BoolTensor(mask_2),
+                 "level_3": torch.BoolTensor(mask_3)}
 
         return masks
 
@@ -418,13 +421,12 @@ class DTUDataset(Dataset):
         Rs = []
         intensity_stats =[]
         prompt = str(np.random.choice(self.prompt_dir[scan][str(ref_view)],1)[0])
-         
         sample['prompt'] = [f"modify the lightness of image to light_class_{target_light} style"]
         for i, vid in enumerate(view_ids):
         # NOTE that the id in image file names is from 1 to 49 (not 0~48)
             light_idx = light_inputs[i]
             img_filename = os.path.join(self.root_dir,
-                            f'Rectified/{scan}_train/rect_{vid+1:03d}_{light_idx}_r5000.png')
+                            f'Rectified/{scan}_train/rect_{vid+1:03d}_{input_lights[i]}_r5000.png')
             target_filename = os.path.join(self.root_dir,
                             f'Rectified/{scan}_train/rect_{vid+1:03d}_{target_light}_r5000.png')
             mask_filename = os.path.join(self.root_dir,
@@ -438,6 +440,7 @@ class DTUDataset(Dataset):
             if self.img_wh is not None:
                 img = img.resize(self.img_wh, Image.BILINEAR)
                 target_img = target_img.resize(self.img_wh, Image.BILINEAR)
+                
 
             img = self.transform(img)
             target_img = self.transform(target_img)
@@ -483,11 +486,7 @@ class DTUDataset(Dataset):
         imgs = self.unpreprocess(imgs)
         target_imgs = self.unpreprocess(target_imgs)
         
-        # randomly choose half of the pixels to be zero
 
-        torch.random.manual_seed(0)
-       
-       
         Ks = np.stack(Ks)
         Rs = np.stack(Rs)
         sample['pose'] = Rs

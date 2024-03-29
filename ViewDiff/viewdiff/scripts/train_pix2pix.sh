@@ -32,12 +32,12 @@ python -m accelerate.commands.launch \
   --finetune-config.cross_frame_attention.unproj_reproj_mode with_cfa \
   --finetune-config.cross_frame_attention.num_3d_layers 1 \
   --finetune-config.cross_frame_attention.dim_3d_latent 16 \
-  --finetune-config.cross_frame_attention.dim_3d_grid 64 \
+  --finetune-config.cross_frame_attention.dim_3d_grid 32 \
   --finetune-config.cross_frame_attention.n_novel_images 1 \
   --finetune-config.cross_frame_attention.vol_rend_proj_in_mode multiple \
   --finetune-config.cross_frame_attention.vol_rend_proj_out_mode multiple \
   --finetune-config.cross_frame_attention.vol_rend_aggregator_mode ibrnet \
-  --finetune-config.cross_frame_attention.last_layer_mode zero-conv \
+  --finetune-config.cross_frame_attention.last_layer_mode no_residual_connection \
   --finetune_config.cross_frame_attention.vol_rend_model_background \
   --finetune_config.cross_frame_attention.vol_rend_background_grid_percentage 0.5 \
   --finetune-config.model.pose_cond_mode sa-ca \
