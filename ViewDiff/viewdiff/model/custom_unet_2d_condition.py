@@ -307,7 +307,7 @@ class UNet2DConditionCrossFrameInExistingAttnModel(ModelMixin, ConfigMixin):
             unproj_reproj_mode == "only_unproj_reproj" or unproj_reproj_mode == "with_unproj_cfa"
         )
         self.use_cfa = (
-            unproj_reproj_mode == "with_cfa" or unproj_reproj_mode == "none"
+            unproj_reproj_mode == "with_cfa" or unproj_reproj_mode == "none" or unproj_reproj_mode == "with_unproj_cfa"
         )
 
         # Check inputs

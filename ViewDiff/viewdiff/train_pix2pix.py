@@ -77,7 +77,7 @@ from torch.utils.tensorboard import SummaryWriter
 # define logger path
 logger_path = os.path.join(os.path.dirname(__file__), "..", "logs")
 # define tensorboard writer
-writer = SummaryWriter(logger_path)
+writer = SummaryWriter("/root/tf-logs")
 
 
 
@@ -211,6 +211,7 @@ def train_and_test(
         # ################
         # Val Loop
         # ################
+        
         
         unet.eval()
         update_vol_rend_inject_noise_sigma(accelerator.unwrap_model(unet), 0.0)  # disable vol-rend noise
@@ -678,9 +679,12 @@ def train_step(
             unet_pred_target[non_noisy_mask] = unet_pred[non_noisy_mask].detach().clone().to(unet_pred_target)
 
         # compute unet-pred-loss
+        small_mask = batch["masks"]["level_3"].unsqueeze(1)
+        small_mask = small_mask.repeat(finetune_config.model.n_input_images,4, 1, 1)
+        
    
         unet_pred_acc = F.mse_loss(unet_pred.float(), unet_pred_target.float(), reduction="none")
-        loss = unet_pred_acc.mean()
+        loss = unet_pred_acc[small_mask].mean()
         unet_pred_acc = unet_pred_acc.mean(dim=(1, 2, 3))
 
         if is_dreambooth:

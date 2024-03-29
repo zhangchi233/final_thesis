@@ -3,9 +3,9 @@
 # Train pix2pix script
 
 python -m accelerate.commands.launch \
-  /workspace/ViewDiff/viewdiff/train_pix2pix_debug.py \
+  /workspace/ViewDiff/viewdiff/train_pix2pix.py \
   --finetune-config.io.pretrained_model_name_or_path timbrooks/instruct-pix2pix \
-  --finetune-config.io.output_dir /workspace/ViewDiff/output_var_debug \
+  --finetune-config.io.output_dir /workspace/ViewDiff/output_var_test \
   --finetune-config.io.experiment_name class6 \
   --finetune-config.training.mixed_precision bf16 \
   --finetune-config.training.dataloader_num_workers 4 \
@@ -37,7 +37,7 @@ python -m accelerate.commands.launch \
   --finetune-config.cross_frame_attention.vol_rend_proj_in_mode multiple \
   --finetune-config.cross_frame_attention.vol_rend_proj_out_mode multiple \
   --finetune-config.cross_frame_attention.vol_rend_aggregator_mode ibrnet \
-  --finetune-config.cross_frame_attention.last_layer_mode zero-conv \
+  --finetune-config.cross_frame_attention.last_layer_mode no_residual_connection \
   --finetune_config.cross_frame_attention.vol_rend_model_background \
   --finetune_config.cross_frame_attention.vol_rend_background_grid_percentage 0.5 \
   --finetune-config.model.pose_cond_mode sa-ca \

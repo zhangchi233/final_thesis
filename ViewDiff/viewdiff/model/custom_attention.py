@@ -488,6 +488,7 @@ class BasicTransformerWithCrossFrameAttentionBlock(BasicTransformerBlock):
                 if hasattr(self, "alpha"):
                     hidden_states = hidden_states + 0 * self.alpha
                 if hasattr(self, "cfa_controlnet_block"):
+                
                     hidden_states = hidden_states + 0 * self.cfa_controlnet_block(attn_output)
             elif self.last_layer_mode == "none":
                 hidden_states = attn_output + hidden_states
