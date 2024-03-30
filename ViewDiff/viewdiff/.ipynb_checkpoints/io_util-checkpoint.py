@@ -19,7 +19,7 @@ from torchvision.utils import make_grid
 from .data.co3d.co3d_dataset import CO3DConfig
 from .data.dtu.dtu import DTUConfig
 from .data.create_video_from_image_folder import main as create_video_from_image_folder
-
+from torchvision.utils import save_image
 
 @dataclass
 class SaveConfig:
@@ -73,7 +73,7 @@ class IOConfig:
     checkpoints_total_limit: int = 2
     """Max number of checkpoints to store."""
 
-    resume_from_checkpoint: Optional[str] = "latest"
+    resume_from_checkpoint: Union[str,bool] = "latest"
     """Whether training should be resumed from a previous checkpoint. Use a path saved by
         ' `--checkpointing_steps`, or `"latest"` to automatically select the last available checkpoint."""
 
@@ -368,25 +368,46 @@ def save_inference_outputs(
         "poses": {},
         "intrs": {}
     }
+
+    
+
+
+
+
     for n in range(N):
+        if io_config.save.pred_files:
+            prompt = batch["prompt"][n]
+            file_name = f"{prompt}_val_step_{step:04d}_{n}.png"
+            pred_img = output.images[n].detach().cpu()
+            
+            conditional_img = batch["images"][n].detach().cpu()
+            conditional_img = conditional_img*0.5+0.5
+            target_img = batch["target_imgs"][n].detach().cpu()
+            target_img = target_img*0.5+0.5
+            file_img = torch.cat([pred_img,conditional_img,target_img],dim = 0)
+            file_path = os.path.join(root_output_path, file_name)
+        
+            save_image(file_img,file_path,
+                    nrow = 3)
+            print("save img to :",file_path,prompt)
+
         for frame_idx in range(K):
             # save the predictions using their original filenames
-            file_name = batch["file_names"][frame_idx][n]
-            sequence = os.path.basename(batch["root"][n])
-            key = f"step_{step:04d}_seq_{sequence}_file_{file_name}_frame_{frame_idx:04d}"
+            
+            key = f"step_{step:04d}_seq_file_{file_name}_frame_{frame_idx:04d}"
             if io_config.save.pred_files:
                 file_patterns.append("pred_file_")
                 if io_config.save.cond_files or "cond_" not in file_name:
                     # convert to pil
-                    img = torch_to_pil(output.images[n, frame_idx].detach().cpu())
-                    pil_images.append(img)
+                    # img = torch_to_pil(output.images[n, frame_idx].detach().cpu())
+                    # pil_images.append(img)
 
-                    # save image as file
-                    with open(
-                        os.path.join(root_output_path, f"{prefix}pred_file_{key}.png"),
-                        "wb",
-                    ) as f:
-                        img.save(f)
+                    # # save image as file
+                    # with open(
+                    #     os.path.join(root_output_path, f"{prefix}pred_file_{key}.png"),
+                    #     "wb",
+                    # ) as f:
+                    #     img.save(f)
 
                     # save cams in dict
                     cams["poses"][key] = batch["pose"][n, frame_idx]

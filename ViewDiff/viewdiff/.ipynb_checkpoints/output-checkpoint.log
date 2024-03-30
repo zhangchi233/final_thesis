@@ -1,0 +1,22 @@
+The following values were not passed to `accelerate launch` and had defaults used instead:
+	`--num_processes` was set to a value of `1`
+	`--num_machines` was set to a value of `1`
+	`--mixed_precision` was set to a value of `'no'`
+	`--dynamo_backend` was set to a value of `'no'`
+To avoid this warning pass in values for each of the problematic parameters or run `accelerate config`.
+/workspace/viewdiff/lib/python3.10/site-packages/tyro/_resolver.py:305: UserWarning: <class 'float'> does not match any type in Union: [<class 'int'>, <class 'NoneType'>]
+  warnings.warn(
+/workspace/viewdiff/lib/python3.10/site-packages/tyro/_fields.py:826: UserWarning: Mutable type <class 'viewdiff.io_util.SaveConfig'> is used as a default value for `save`. This is dangerous! Consider using `dataclasses.field(default_factory=...)` or marking <class 'viewdiff.io_util.SaveConfig'> as frozen.
+  warnings.warn(
+03/25/2024 14:48:21 - INFO - __main__ - Distributed environment: NO
+Num processes: 1
+Process index: 0
+Local process index: 0
+Device: cuda
+
+Mixed precision type: bf16
+
+{'clip_sample_range', 'variance_type', 'timestep_spacing'} was not found in config. Values will be initialized to default values.
+{'force_upcast', 'scaling_factor'} was not found in config. Values will be initialized to default values.
+{'resnet_out_scale_factor', 'time_cond_proj_dim', 'projection_class_embeddings_input_dim', 'addition_embed_type', 'time_embedding_dim', 'time_embedding_act_fn', 'encoder_hid_dim_type', 'addition_embed_type_num_heads', 'transformer_layers_per_block', 'cross_attention_norm', 'encoder_hid_dim', 'time_embedding_type', 'mid_block_only_cross_attention', 'dropout', 'resnet_skip_time_act', 'class_embeddings_concat', 'timestep_post_act', 'num_attention_heads', 'attention_type', 'addition_time_embed_dim', 'conv_out_kernel', 'conv_in_kernel'} was not found in config. Values will be initialized to default values.
+03/25/2024 14:48:22 - INFO - __main__ - Initializing the StableDiffusion3D UNet from the pretrained UNet.

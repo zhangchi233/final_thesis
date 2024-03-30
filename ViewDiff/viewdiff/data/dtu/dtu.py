@@ -1,6 +1,7 @@
 from torch.utils.data import Dataset
 import sys
-sys.path.append('/root/autodl-tmp/project/dp_simple/')
+ROOTDIR = "workspace"
+sys.path.append(f'/{ROOTDIR}/project/dp_simple/')
 from CasMVSNet_pl.datasets.utils import read_pfm
 import os
 import numpy as np
@@ -172,7 +173,7 @@ class DTUConfig:
     split: Optional[str] = None
     """Must be specified if --subset is specified. Tells which split to use from the subset."""
 
-    root_dir: str = "/root/autodl-tmp/mvs_training/dtu/"
+    root_dir: str =f"/{ROOTDIR}/mvs_training/dtu/"
     target_light = 6
     n_views:int=3 
     levels:int=3 
@@ -181,7 +182,8 @@ class DTUConfig:
     abs_error:Optional[str] ="abs"
     output_total:Optional[bool]=False
     threshold: Optional[int] = 4.7
-    prompt_dir: Optional[str] = "/root/autodl-tmp/mvs_training/dtu/co3d_blip2_captions_final.json"
+    prompt_dir: Optional[str] = f"/{ROOTDIR}/mvs_training/dtu/co3d_blip2_captions_final.json"
+    debug: Optional[int] = 0
 
 class DTUDataset(Dataset):
     def __init__(self, config: DTUConfig):
@@ -202,7 +204,7 @@ class DTUDataset(Dataset):
                 self.img_wh = (config.img_wh, config.img_wh)
             assert self.img_wh[0]%32==0 and self.img_wh[1]%32==0, \
                 'img_wh must both be multiples of 32!'
-        
+        self.debug = config.debug
         self.threshold = config.threshold
         self.build_metas()
         self.n_views = config.n_views
@@ -223,14 +225,17 @@ class DTUDataset(Dataset):
         
     def build_metas(self):
         self.metas = []
-        with open(f'/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}.txt') as f:
+        if self.debug==1:
+            self.split = "train"
+        with open(f'/{ROOTDIR}/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}.txt') as f:
             self.scans = [line.rstrip() for line in f.readlines()]
-        output_pkl = f'/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}_abs.pkl'
+        output_pkl = f'/{ROOTDIR}/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}_abs.pkl'
         import pickle
         with open(output_pkl, 'rb') as f:
             self.output_pkl = pickle.load(f)
         # light conditions 0-6 for training
         # light condition 3 for testing (the brightest?)
+        
         outputs_total = {}
         for scan in self.output_pkl.keys():
             scan_index = scan.split('_')[0]
@@ -265,8 +270,9 @@ class DTUDataset(Dataset):
                                 continue
                             else:
                                 self.metas += [(scan, ref_view,light_idx, src_views,int(np.argmin(losses)))]
-                                
-                                
+                               
+        if self.debug==1:
+            self.metas = self.metas[:3]   
                            
                          
     def build_proj_mats(self):
@@ -393,6 +399,8 @@ class DTUDataset(Dataset):
         scan, ref_view,light_idx, src_views,target_light = self.metas[idx]
         # use only the reference view and first nviews-1 source views
         view_ids = [ref_view] + src_views[:self.n_views-1]
+        light_inputs = np.random.choice(7,len(view_ids))
+        
 
         # output_key = f"{scan}_{ref_view}_{src_views[0]}_{src_views[1]}"
         # if self.total_pkl:
@@ -417,7 +425,7 @@ class DTUDataset(Dataset):
         sample['prompt'] = [f"modify the lightness of image to light_class_{target_light} style"]
         for i, vid in enumerate(view_ids):
         # NOTE that the id in image file names is from 1 to 49 (not 0~48)
-        
+            light_idx = light_inputs[i]
             img_filename = os.path.join(self.root_dir,
                             f'Rectified/{scan}_train/rect_{vid+1:03d}_{input_lights[i]}_r5000.png')
             target_filename = os.path.join(self.root_dir,
@@ -448,6 +456,7 @@ class DTUDataset(Dataset):
 
 
             if i == 0:  # reference view
+                sample["small_mask"]=[]
                 
                 sample['init_depth_min'] = torch.FloatTensor([depth_min])
                 
@@ -460,6 +469,9 @@ class DTUDataset(Dataset):
                 sample["depth"] = sample["depths"]["level_0"]
                 ref_proj_inv = torch.inverse(proj_mat_ls)
             else:
+                # small_mask = self.read_mask(mask_filename)["level_0"]
+                # small_wh = (self.img_wh[0]/8,self.img_wh[1]/8)
+                # sample["small_mask"] = interpolate(small_mask[None,None].float(), small_wh, mode='nearest')[0,0].byte()
                 
                 proj_mats += [proj_mat_ls @ ref_proj_inv]
             var, mean = torch.var_mean(img)
@@ -475,13 +487,14 @@ class DTUDataset(Dataset):
         imgs = self.unpreprocess(imgs)
         target_imgs = self.unpreprocess(target_imgs)
         
-        
+
        
         Ks = np.stack(Ks)
         Rs = np.stack(Rs)
         sample['pose'] = Rs
         sample['K'] = Ks
         sample['images'] = imgs
+
         sample["intensity_stats"] = torch.stack(intensity_stats)
         sample['proj_mats'] = proj_mats
         sample['depth_interval'] = torch.FloatTensor([self.depth_interval])
@@ -489,6 +502,10 @@ class DTUDataset(Dataset):
         
 
         sample['target_imgs'] = target_imgs
+        small_mask = sample["masks"]["level_0"]
+        small_wh = (80,64)
+        sample["small_mask"] = interpolate(small_mask[None,None].float(), small_wh, mode='nearest')[0,0].byte()
+
         sample["bbox"] =torch.tensor([[-1, -1, -1], [1, 1, 1]], dtype=torch.float32)
 
 

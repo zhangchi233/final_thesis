@@ -77,7 +77,7 @@ from torch.utils.tensorboard import SummaryWriter
 # define logger path
 logger_path = os.path.join(os.path.dirname(__file__), "..", "logs")
 # define tensorboard writer
-writer = SummaryWriter("/root/tf-logs")
+writer = SummaryWriter(logger_path)
 
 
 
@@ -579,15 +579,22 @@ def train_step(
             # convert images to latent space.
             _, images = collapse_tensor_to_batch_dim(batch["images"])
             _, target_imgs =  collapse_tensor_to_batch_dim(batch["target_imgs"])
+
+          
+
             target_imgs = images.squeeze(1)
             target_imgs = target_imgs[:, :3].to(weight_dtype) 
             target_latents = vae.encode(target_imgs).latent_dist.sample()
-            target_latents = target_latents * vae.config.scaling_factor
+            
 
             images = images.squeeze(1)
             images = images[:, :3].to(weight_dtype)  # remove alpha channel
             latents = vae.encode(images).latent_dist.sample()
             latents = latents # * vae.config.scaling_factor
+            
+
+            
+            target_latents = target_latents * vae.config.scaling_factor
         else:
             raise ValueError("images not found in batch")
 
@@ -612,7 +619,7 @@ def train_step(
             timesteps = torch.where(non_noisy_mask, torch.zeros_like(timesteps), timesteps)
 
         # Sample noise that we'll add to the latents
-        noise = torch.randn_like(latents)
+        noise = torch.randn_like(target_latents)
 
         # Add noise to the latents according to the noise magnitude at each timestep
         # (this is the forward diffusion process)
@@ -633,7 +640,7 @@ def train_step(
             prompt_mask = prompt_mask.reshape(N, 1, 1)
             # Final text conditioning.
             null_conditioning = text_encoder(tokenize_captions(tokenizer, [""]).to(accelerator.device))[0]
-            print(null_conditioning.shape,encoder_hidden_states.shape,prompt_mask.shape)
+            
             encoder_hidden_states = torch.where(prompt_mask, null_conditioning, encoder_hidden_states)
 
         # Get the target for unet-pred loss depending on the prediction type
@@ -652,14 +659,7 @@ def train_step(
         # """
         # test
         # """
-        # device = "cpu"
-        
-        # noisy_latents = noisy_latents.to(device)
-        # timesteps = timesteps.to(device)
-        # encoder_hidden_states = encoder_hidden_states.to(device)
-        # cross_attention_kwargs["pose_cond"] = cross_attention_kwargs['pose_cond'].to(device)
-        # non_noisy_mask = non_noisy_mask.cpu()
-        # unet_pred_target = unet_pred_target.cpu()
+
 
        
         output = unet(
@@ -679,12 +679,10 @@ def train_step(
             unet_pred_target[non_noisy_mask] = unet_pred[non_noisy_mask].detach().clone().to(unet_pred_target)
 
         # compute unet-pred-loss
-        small_mask = batch["masks"]["level_3"].unsqueeze(1)
-        small_mask = small_mask.repeat(finetune_config.model.n_input_images,4, 1, 1)
-        
-   
+
+      
         unet_pred_acc = F.mse_loss(unet_pred.float(), unet_pred_target.float(), reduction="none")
-        loss = unet_pred_acc[small_mask].mean()
+        loss = unet_pred_acc.mean()
         unet_pred_acc = unet_pred_acc.mean(dim=(1, 2, 3))
 
         if is_dreambooth:
@@ -870,7 +868,7 @@ def test_step(
         _, known_images = collapse_tensor_to_batch_dim(batch["images"])
         known_images = known_images.to(pipeline.device)
         known_images = known_images.squeeze(1)
-        print(known_images.shape)
+     
 
     pose = pose.to(pipeline.device)
     K = K.to(pipeline.device)
