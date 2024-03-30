@@ -17,9 +17,9 @@ from torch.nn.functional import interpolate
 from torchvision.utils import make_grid
 import sys
 sys.path.append("/root/autodl-tmp/ViewDiff/viewdiff")
-from data.co3d.co3d_dataset import CO3DConfig
-from data.dtu.dtu import DTUConfig
-from data.create_video_from_image_folder import main as create_video_from_image_folder
+from .data.co3d.co3d_dataset import CO3DConfig
+from .data.dtu.dtu import DTUConfig
+from .data.create_video_from_image_folder import main as create_video_from_image_folder
 
 from torchvision.utils import save_image
 

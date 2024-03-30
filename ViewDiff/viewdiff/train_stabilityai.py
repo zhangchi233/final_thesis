@@ -540,6 +540,7 @@ def train_step(
         # parse batch
         # collapse K dimension into batch dimension (no concatenation happening)
         batch["images"] = 2*batch["images"]-1
+        batch["target_imgs"] = 2*batch["target_imgs"]-1
        
         
         batch["prompt"] = collapse_prompt_to_batch_dim(batch["prompt"], finetune_config.model.n_input_images)
@@ -599,8 +600,8 @@ def train_step(
         if not is_dreambooth and finetune_config.training.prob_images_not_noisy > 0:
             random_p_non_noisy = torch.rand((batch_size, finetune_config.model.n_input_images), device=latents.device, generator=generator)
             non_noisy_mask = random_p_non_noisy < finetune_config.training.prob_images_not_noisy
-            non_noisy_mask[:,:-1] = False
-            non_noisy_mask[:,-1] = True
+            non_noisy_mask[:,:-1] = True
+            non_noisy_mask[:,-1] = False
             non_noisy_mask = non_noisy_mask.flatten()
             timesteps = torch.where(non_noisy_mask, torch.zeros_like(timesteps), timesteps)
           
@@ -892,12 +893,12 @@ def test_step(
     # check classifier-free-guidance
     if guidance_scale > 1:
         if "pose_cond" in cross_attention_kwargs:
-            cross_attention_kwargs["pose_cond"] = torch.cat([cross_attention_kwargs["pose_cond"]] * 3)
+            cross_attention_kwargs["pose_cond"] = torch.cat([cross_attention_kwargs["pose_cond"]] * 2)
         if "unproj_reproj_kwargs" in cross_attention_kwargs:
             proj_kwargs = cross_attention_kwargs["unproj_reproj_kwargs"]
-            proj_kwargs["pose"] = torch.cat([proj_kwargs["pose"]] * 3)
-            proj_kwargs["K"] = torch.cat([proj_kwargs["K"]] * 3)
-            proj_kwargs["bbox"] = torch.cat([proj_kwargs["bbox"]] * 3)
+            proj_kwargs["pose"] = torch.cat([proj_kwargs["pose"]] * 2)
+            proj_kwargs["K"] = torch.cat([proj_kwargs["K"]] * 2)
+            proj_kwargs["bbox"] = torch.cat([proj_kwargs["bbox"]] * 2)
 
     # run denoising prediction + calc psnr/lpips/ssim
     outputs = []
@@ -914,7 +915,7 @@ def test_step(
             generator=generator,
             cross_attention_kwargs=cross_attention_kwargs,
             guidance_scale=guidance_scale,
-            image_guidance_scale=image_guidance_scale,
+            #image_guidance_scale=image_guidance_scale,
             decode_all_timesteps=True,
             num_inference_steps=num_inference_steps,
             n_images_per_batch=model_config.n_input_images,

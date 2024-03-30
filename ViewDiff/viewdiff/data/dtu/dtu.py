@@ -1,6 +1,6 @@
 from torch.utils.data import Dataset
 import sys
-ROOTDIR = "workspace"
+ROOTDIR = "root/autodl-tmp"
 sys.path.append(f'/{ROOTDIR}/project/dp_simple/')
 from CasMVSNet_pl.datasets.utils import read_pfm
 import os
@@ -206,6 +206,7 @@ class DTUDataset(Dataset):
                 'img_wh must both be multiples of 32!'
         self.debug = config.debug
         self.threshold = config.threshold
+        self.readbbox()
         self.build_metas()
         self.n_views = config.n_views
         self.levels = config.levels # FPN levels
@@ -317,7 +318,12 @@ class DTUDataset(Dataset):
         # depth_min & depth_interval: line 11
         depth_min = float(lines[11].split()[0])
         return intrinsics, extrinsics, depth_min
-
+    def readbbox(self):
+        bbox_file = os.path.join(self.root_dir, 'bbox.pkl')
+        import pickle
+        with open(bbox_file, 'rb') as f:
+            bboxes = pickle.load(f)
+        self.bboxes = bboxes
     def read_depth(self, filename):
         depth = np.array(read_pfm(filename)[0], dtype=np.float32) # (1200, 1600)
         if self.img_wh is None:
@@ -399,7 +405,8 @@ class DTUDataset(Dataset):
         scan, ref_view,light_idx, src_views,target_light = self.metas[idx]
         # use only the reference view and first nviews-1 source views
         view_ids = [ref_view] + src_views[:self.n_views-1]
-        light_inputs = np.random.choice(7,len(view_ids))
+        light_inputs = np.random.choice(7,1)
+        input_lights = [light_idx,light_idx,light_inputs[0]]
         
 
         # output_key = f"{scan}_{ref_view}_{src_views[0]}_{src_views[1]}"
@@ -409,6 +416,16 @@ class DTUDataset(Dataset):
         # else:
         #     target_light = self.output_pkl[output_key]
         #     target_light = np.argmin(target_light)
+        scan_key = f"{scan}_train"
+        x_min = self.bboxes[scan_key]["x"]["min"]
+        x_max = self.bboxes[scan_key]["x"]["max"]
+        y_min = self.bboxes[scan_key]["y"]["min"]
+        y_max = self.bboxes[scan_key]["y"]["max"]
+        z_min = self.bboxes[scan_key]["z"]["min"]
+        z_max = self.bboxes[scan_key]["z"]["max"]
+
+
+
 
         
 
@@ -421,12 +438,11 @@ class DTUDataset(Dataset):
         Rs = []
         intensity_stats =[]
         prompt = str(np.random.choice(self.prompt_dir[scan][str(ref_view)],1)[0])
-        input_light = np.random.choice([0,1,2,3,4,5,6], 1, replace=False)
-        input_lights = input_lights[light_idx,light_idx,light_idx]
+      
         sample['prompt'] = [f"modify the lightness of image to light_class_{light_idx} style"]
         for i, vid in enumerate(view_ids):
         # NOTE that the id in image file names is from 1 to 49 (not 0~48)
-            light_idx = light_inputs[i]
+            
             img_filename = os.path.join(self.root_dir,
                             f'Rectified/{scan}_train/rect_{vid+1:03d}_{input_lights[i]}_r5000.png')
             target_filename = os.path.join(self.root_dir,
@@ -507,7 +523,8 @@ class DTUDataset(Dataset):
         small_wh = (80,64)
         sample["small_mask"] = interpolate(small_mask[None,None].float(), small_wh, mode='nearest')[0,0].byte()
 
-        sample["bbox"] =torch.tensor([[-1, -1, -1], [1, 1, 1]], dtype=torch.float32)
+        sample["bbox"] =torch.tensor([[x_min, y_min, z_min],
+                                     [x_max,y_max,z_max]], dtype=torch.float32)
 
 
 
