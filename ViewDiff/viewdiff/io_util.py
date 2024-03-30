@@ -75,7 +75,7 @@ class IOConfig:
     checkpoints_total_limit: int = 2
     """Max number of checkpoints to store."""
 
-    resume_from_checkpoint: Union[str,bool] = "latest"
+    resume_from_checkpoint: Union[str,bool] = False
     """Whether training should be resumed from a previous checkpoint. Use a path saved by
         ' `--checkpointing_steps`, or `"latest"` to automatically select the last available checkpoint."""
 

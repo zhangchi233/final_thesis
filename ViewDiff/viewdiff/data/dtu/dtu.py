@@ -421,15 +421,16 @@ class DTUDataset(Dataset):
         Rs = []
         intensity_stats =[]
         prompt = str(np.random.choice(self.prompt_dir[scan][str(ref_view)],1)[0])
-        input_lights = np.random.choice([0,1,2,3,4,5,6], 3, replace=False)
-        sample['prompt'] = [f"modify the lightness of image to light_class_{target_light} style"]
+        input_light = np.random.choice([0,1,2,3,4,5,6], 1, replace=False)
+        input_lights = input_lights[light_idx,light_idx,light_idx]
+        sample['prompt'] = [f"modify the lightness of image to light_class_{light_idx} style"]
         for i, vid in enumerate(view_ids):
         # NOTE that the id in image file names is from 1 to 49 (not 0~48)
             light_idx = light_inputs[i]
             img_filename = os.path.join(self.root_dir,
                             f'Rectified/{scan}_train/rect_{vid+1:03d}_{input_lights[i]}_r5000.png')
             target_filename = os.path.join(self.root_dir,
-                            f'Rectified/{scan}_train/rect_{vid+1:03d}_{target_light}_r5000.png')
+                            f'Rectified/{scan}_train/rect_{vid+1:03d}_{light_idx}_r5000.png')
             mask_filename = os.path.join(self.root_dir,
                             f'Depths/{scan}/depth_visual_{vid:04d}.png')
             depth_filename = os.path.join(self.root_dir,
