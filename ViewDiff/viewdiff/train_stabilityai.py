@@ -544,7 +544,13 @@ def train_step(
        
         
         batch["prompt"] = collapse_prompt_to_batch_dim(batch["prompt"], finetune_config.model.n_input_images)
-        batch["prompt"] = [cap[0] for cap in batch["prompt"]]
+        prompts = []
+        for i in range(batch["images"].shape[0]):
+            
+            prompts.extend([cap[i] for cap in batch["prompt"]])
+        batch["prompt"] = prompts
+        
+        
         batch_size, pose = collapse_tensor_to_batch_dim(batch["pose"])
         
         _, K = collapse_tensor_to_batch_dim(batch["K"])
@@ -573,7 +579,7 @@ def train_step(
 
         if "images" in batch:
             # convert images to latent space.
-            _, images = collapse_tensor_to_batch_dim(batch["images"])
+            _, images = collapse_tensor_to_batch_dim(batch["target_imgs"])
           
             target_imgs = images.squeeze(1)
             target_imgs = target_imgs[:, :3].to(weight_dtype) 
@@ -629,6 +635,8 @@ def train_step(
             prompt_mask = prompt_mask.reshape(N, 1, 1)
             # Final text conditioning.
             null_conditioning = text_encoder(tokenize_captions(tokenizer, [""]).to(accelerator.device))[0]
+            null_conditioning = null_conditioning.repeat(N, 1, 1)
+           
             encoder_hidden_states = torch.where(prompt_mask, null_conditioning, encoder_hidden_states)
 
         # Get the target for unet-pred loss depending on the prediction type

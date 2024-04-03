@@ -181,7 +181,7 @@ class DTUConfig:
     img_wh:int=None
     abs_error:Optional[str] ="abs"
     output_total:Optional[bool]=False
-    threshold: Optional[int] = 4.7
+    threshold: Optional[int] = 0.8
     prompt_dir: Optional[str] = f"/{ROOTDIR}/mvs_training/dtu/co3d_blip2_captions_final.json"
     debug: Optional[int] = 0
 
@@ -405,9 +405,12 @@ class DTUDataset(Dataset):
         scan, ref_view,light_idx, src_views,target_light = self.metas[idx]
         # use only the reference view and first nviews-1 source views
         view_ids = [ref_view] + src_views[:self.n_views-1]
-        light_inputs = np.random.choice(7,1)
+        lights = [0,1,2,3,4,5,6]
+        lights.remove(light_idx)
+        light_inputs = np.random.choice(lights,1)
         input_lights = [light_idx,light_idx,light_inputs[0]]
         
+        signs = light_idx - light_inputs[0]
 
         # output_key = f"{scan}_{ref_view}_{src_views[0]}_{src_views[1]}"
         # if self.total_pkl:
@@ -504,6 +507,13 @@ class DTUDataset(Dataset):
         imgs = self.unpreprocess(imgs)
         target_imgs = self.unpreprocess(target_imgs)
         
+        img_mask = (imgs-target_imgs).abs().mean(1,keepdim=True).repeat(1,3,1,1)
+
+        if signs>0:
+            imgs[img_mask>self.threshold] *= 0.12
+        else:
+            imgs[img_mask>self.threshold] *= 2.12
+            imgs.clamp_(0,1)
 
        
         Ks = np.stack(Ks)
@@ -511,6 +521,7 @@ class DTUDataset(Dataset):
         sample['pose'] = Rs
         sample['K'] = Ks
         sample['images'] = imgs
+        
 
         sample["intensity_stats"] = torch.stack(intensity_stats)
         sample['proj_mats'] = proj_mats

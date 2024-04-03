@@ -1377,7 +1377,7 @@ class UNet2DConditionCrossFrameInExistingAttnModel(ModelMixin, ConfigMixin):
             timesteps[:, 0:n_known_images] = 0
             timesteps = collapse_batch(timesteps)
             #print(f"set timestep 0 for n_known_images={n_known_images} -->", timesteps, timesteps.shape)
-        print(timesteps, timesteps.shape)
+        
         t_emb = self.time_proj(timesteps)
 
         # `Timesteps` does not contain any weights and will always return f32 tensors
