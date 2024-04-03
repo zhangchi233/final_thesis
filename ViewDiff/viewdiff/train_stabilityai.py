@@ -17,7 +17,7 @@ from transformers import CLIPTextModel, CLIPTokenizer
 from diffusers import (
     AutoencoderKL,
     DDPMScheduler,
-    
+    PNDMScheduler,
     EulerAncestralDiscreteScheduler
 )
 import sys
@@ -44,7 +44,7 @@ from viewdiff.model.util import (
     CrossFrameAttentionConfig,
     build_cross_attention_kwargs,
 )
-from viewdiff.model.custom_stable_instructPix2pix_pipeline import CustomInstructPix2pixDiffusionPipeline
+from viewdiff.model.custom_stable_diffusion_pipeline import CustomStableDiffusionPipeline
 
 from viewdiff.io_util import (
     make_image_grid,
@@ -77,7 +77,7 @@ from torch.utils.tensorboard import SummaryWriter
 # define logger path
 logger_path = os.path.join(os.path.dirname(__file__), "..", "logs")
 # define tensorboard writer
-writer = SummaryWriter(logger_path)
+writer = SummaryWriter("/root/tf-logs")
 
 
 
@@ -212,6 +212,7 @@ def train_and_test(
         # Val Loop
         # ################
         
+        
         unet.eval()
         update_vol_rend_inject_noise_sigma(accelerator.unwrap_model(unet), 0.0)  # disable vol-rend noise
         update_n_novel_images(accelerator.unwrap_model(unet), 0)  # disable skipping frame in inference mode
@@ -223,7 +224,7 @@ def train_and_test(
             ema_unet.store(unet.parameters())
             ema_unet.copy_to(unet.parameters())
         # The models need unwrapping because for compatibility in distributed training mode.
-        pipeline = CustomInstructPix2pixDiffusionPipeline.from_pretrained(
+        pipeline = CustomStableDiffusionPipeline.from_pretrained(
             finetune_config.io.pretrained_model_name_or_path,
             unet=accelerator.unwrap_model(unet),
             text_encoder=accelerator.unwrap_model(text_encoder),
@@ -233,14 +234,14 @@ def train_and_test(
         )
         pipeline = pipeline.to(accelerator.device)
         pipeline.set_progress_bar_config(disable=False)
-        pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(pipeline.scheduler.config)
+        pipeline.scheduler = PNDMScheduler.from_config(pipeline.scheduler.config)
         pipeline.scheduler.config.prediction_type = finetune_config.training.noise_prediction_type
         if (
             accelerator.is_main_process
             and finetune_config.training.validation_epochs > 0
             and (epoch % finetune_config.training.validation_epochs) == 0
         ):
-            for i in range(10):
+            for i in range(1):
                 
                 # in case the validation dataloader is exhausted, restart it
                 try:
@@ -540,6 +541,7 @@ def train_step(
         # collapse K dimension into batch dimension (no concatenation happening)
         batch["images"] = 2*batch["images"]-1
         batch["target_imgs"] = 2*batch["target_imgs"]-1
+       
         
         batch["prompt"] = collapse_prompt_to_batch_dim(batch["prompt"], finetune_config.model.n_input_images)
         batch["prompt"] = [cap[0] for cap in batch["prompt"]]
@@ -572,16 +574,13 @@ def train_step(
         if "images" in batch:
             # convert images to latent space.
             _, images = collapse_tensor_to_batch_dim(batch["images"])
-            _, target_imgs =  collapse_tensor_to_batch_dim(batch["target_imgs"])
+          
             target_imgs = images.squeeze(1)
             target_imgs = target_imgs[:, :3].to(weight_dtype) 
             target_latents = vae.encode(target_imgs).latent_dist.sample()
-            target_latents = target_latents * vae.config.scaling_factor
+            latents = target_latents * vae.config.scaling_factor
 
-            images = images.squeeze(1)
-            images = images[:, :3].to(weight_dtype)  # remove alpha channel
-            latents = vae.encode(images).latent_dist.sample()
-            latents = latents # * vae.config.scaling_factor
+
         else:
             raise ValueError("images not found in batch")
 
@@ -601,17 +600,20 @@ def train_step(
         if not is_dreambooth and finetune_config.training.prob_images_not_noisy > 0:
             random_p_non_noisy = torch.rand((batch_size, finetune_config.model.n_input_images), device=latents.device, generator=generator)
             non_noisy_mask = random_p_non_noisy < finetune_config.training.prob_images_not_noisy
-            non_noisy_mask[:, finetune_config.training.max_num_images_not_noisy:] = False
+            non_noisy_mask[:,:-1] = True
+            non_noisy_mask[:,-1] = False
             non_noisy_mask = non_noisy_mask.flatten()
             timesteps = torch.where(non_noisy_mask, torch.zeros_like(timesteps), timesteps)
+          
 
         # Sample noise that we'll add to the latents
         noise = torch.randn_like(latents)
 
         # Add noise to the latents according to the noise magnitude at each timestep
         # (this is the forward diffusion process)
-        noisy_latents = noise_scheduler.add_noise(target_latents, noise, timesteps)
-        noisy_latents = torch.cat([noisy_latents,latents],dim = 1)
+
+        noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+       
 
         # convert prompt to input_ids
         batch["input_ids"] = tokenize_captions(tokenizer, batch["prompt"]).to(latents.device)
@@ -672,9 +674,12 @@ def train_step(
             unet_pred_target[non_noisy_mask] = unet_pred[non_noisy_mask].detach().clone().to(unet_pred_target)
 
         # compute unet-pred-loss
+        small_mask = batch["masks"]["level_3"].unsqueeze(1)
+        small_mask = small_mask.repeat(finetune_config.model.n_input_images,4, 1, 1)
+        
    
         unet_pred_acc = F.mse_loss(unet_pred.float(), unet_pred_target.float(), reduction="none")
-        loss = unet_pred_acc.mean()
+        loss = unet_pred_acc[small_mask].mean()
         unet_pred_acc = unet_pred_acc.mean(dim=(1, 2, 3))
 
         if is_dreambooth:
@@ -815,14 +820,14 @@ def train_step(
 
 @torch.autocast("cuda")
 def test_step(
-    pipeline: CustomInstructPix2pixDiffusionPipeline,
+    pipeline: CustomStableDiffusionPipeline,
     batch,
     model_config: ModelConfig,
     cfa_config: CrossFrameAttentionConfig,
     io_config: IOConfig,
     orig_hw,
-    guidance_scale: float = 15,
-    image_guidance_scale: float = 1.5,
+    guidance_scale: float = 16,
+    image_guidance_scale: float = 1,
     generator=None,
     prefix: str = None,
     global_step: int = 0,
@@ -836,7 +841,7 @@ def test_step(
     batch_size = len(batch["prompt"])
 
     batch["images"] = 2*batch["images"]-1
-    batch["images"] = 2*batch["target_imgs"]-1
+    batch["target_imgs"] = 2*batch["target_imgs"]-1
     # parse batch
     # collapse K dimension into batch dimension (no concatenation happening)
     batch["prompt"] = [cap[0] for cap in batch["prompt"]]
@@ -857,9 +862,10 @@ def test_step(
     else:
         # instruct pix2pix
         assert batch_size == 1, "sliding window currently only supported for batch-size 1"
-        _, known_images = collapse_tensor_to_batch_dim(batch["images"])
+        _, known_images = collapse_tensor_to_batch_dim(batch["images"][:,:2])
         known_images = known_images.to(pipeline.device)
         known_images = known_images.squeeze(1)
+        print(known_images.shape)
 
     pose = pose.to(pipeline.device)
     K = K.to(pipeline.device)
@@ -887,12 +893,12 @@ def test_step(
     # check classifier-free-guidance
     if guidance_scale > 1:
         if "pose_cond" in cross_attention_kwargs:
-            cross_attention_kwargs["pose_cond"] = torch.cat([cross_attention_kwargs["pose_cond"]] * 3)
+            cross_attention_kwargs["pose_cond"] = torch.cat([cross_attention_kwargs["pose_cond"]] * 2)
         if "unproj_reproj_kwargs" in cross_attention_kwargs:
             proj_kwargs = cross_attention_kwargs["unproj_reproj_kwargs"]
-            proj_kwargs["pose"] = torch.cat([proj_kwargs["pose"]] * 3)
-            proj_kwargs["K"] = torch.cat([proj_kwargs["K"]] * 3)
-            proj_kwargs["bbox"] = torch.cat([proj_kwargs["bbox"]] * 3)
+            proj_kwargs["pose"] = torch.cat([proj_kwargs["pose"]] * 2)
+            proj_kwargs["K"] = torch.cat([proj_kwargs["K"]] * 2)
+            proj_kwargs["bbox"] = torch.cat([proj_kwargs["bbox"]] * 2)
 
     # run denoising prediction + calc psnr/lpips/ssim
     outputs = []
@@ -909,7 +915,7 @@ def test_step(
             generator=generator,
             cross_attention_kwargs=cross_attention_kwargs,
             guidance_scale=guidance_scale,
-            image_guidance_scale=image_guidance_scale,
+            #image_guidance_scale=image_guidance_scale,
             decode_all_timesteps=True,
             num_inference_steps=num_inference_steps,
             n_images_per_batch=model_config.n_input_images,
