@@ -213,68 +213,68 @@ def train_and_test(
         # ################
         
         
-        unet.eval()
-        update_vol_rend_inject_noise_sigma(accelerator.unwrap_model(unet), 0.0)  # disable vol-rend noise
-        update_n_novel_images(accelerator.unwrap_model(unet), 0)  # disable skipping frame in inference mode
-        torch.cuda.empty_cache()
-        logger.info(f"Running validation...")
-        # create pipeline
-        if finetune_config.model.use_ema:
-            # Store the UNet parameters temporarily and load the EMA parameters to perform inference.
-            ema_unet.store(unet.parameters())
-            ema_unet.copy_to(unet.parameters())
-        # The models need unwrapping because for compatibility in distributed training mode.
-        pipeline = CustomInstructPix2pixDiffusionPipeline.from_pretrained(
-            finetune_config.io.pretrained_model_name_or_path,
-            unet=accelerator.unwrap_model(unet),
-            text_encoder=accelerator.unwrap_model(text_encoder),
-            vae=accelerator.unwrap_model(vae),
-            revision=finetune_config.io.revision,
-            torch_dtype=weight_dtype,
-        )
-        pipeline = pipeline.to(accelerator.device)
-        pipeline.set_progress_bar_config(disable=False)
-        pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(pipeline.scheduler.config)
-        pipeline.scheduler.config.prediction_type = finetune_config.training.noise_prediction_type
-        if (
-            accelerator.is_main_process
-            and finetune_config.training.validation_epochs > 0
-            and (epoch % finetune_config.training.validation_epochs) == 0
-        ):
-            for i in range(1):
+        # unet.eval()
+        # update_vol_rend_inject_noise_sigma(accelerator.unwrap_model(unet), 0.0)  # disable vol-rend noise
+        # update_n_novel_images(accelerator.unwrap_model(unet), 0)  # disable skipping frame in inference mode
+        # torch.cuda.empty_cache()
+        # logger.info(f"Running validation...")
+        # # create pipeline
+        # if finetune_config.model.use_ema:
+        #     # Store the UNet parameters temporarily and load the EMA parameters to perform inference.
+        #     ema_unet.store(unet.parameters())
+        #     ema_unet.copy_to(unet.parameters())
+        # # The models need unwrapping because for compatibility in distributed training mode.
+        # pipeline = CustomInstructPix2pixDiffusionPipeline.from_pretrained(
+        #     finetune_config.io.pretrained_model_name_or_path,
+        #     unet=accelerator.unwrap_model(unet),
+        #     text_encoder=accelerator.unwrap_model(text_encoder),
+        #     vae=accelerator.unwrap_model(vae),
+        #     revision=finetune_config.io.revision,
+        #     torch_dtype=weight_dtype,
+        # )
+        # pipeline = pipeline.to(accelerator.device)
+        # pipeline.set_progress_bar_config(disable=False)
+        # pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(pipeline.scheduler.config)
+        # pipeline.scheduler.config.prediction_type = finetune_config.training.noise_prediction_type
+        # if (
+        #     accelerator.is_main_process
+        #     and finetune_config.training.validation_epochs > 0
+        #     and (epoch % finetune_config.training.validation_epochs) == 0
+        # ):
+        #     for i in range(1):
                 
-                # in case the validation dataloader is exhausted, restart it
-                try:
-                    validation_batch = next(validation_iter)  # always use fixed validation_batch
+        #         # in case the validation dataloader is exhausted, restart it
+        #         try:
+        #             validation_batch = next(validation_iter)  # always use fixed validation_batch
 
-                except:
-                    validation_iter = iter(validation_dataloader)
-                    validation_batch = next(validation_iter) 
+        #         except:
+        #             validation_iter = iter(validation_dataloader)
+        #             validation_batch = next(validation_iter) 
                 
                 
 
-                # run inference on one batch of the validation set
+        #         # run inference on one batch of the validation set
                 
-                test_step(
-                    pipeline=pipeline,
-                    batch=validation_batch,
-                    model_config=finetune_config.model,
-                    cfa_config=finetune_config.cross_frame_attention,
-                    io_config=finetune_config.io,
-                    generator=generator,
-                    prefix="Validation",
-                    global_step=global_step,
-                    writer=accelerator.trackers[0].writer,
-                    orig_hw=(validation_dataset_config.batch.image_height, validation_dataset_config.batch.image_width),
-                )
-                global_step+=1
+        #         test_step(
+        #             pipeline=pipeline,
+        #             batch=validation_batch,
+        #             model_config=finetune_config.model,
+        #             cfa_config=finetune_config.cross_frame_attention,
+        #             io_config=finetune_config.io,
+        #             generator=generator,
+        #             prefix="Validation",
+        #             global_step=global_step,
+        #             writer=accelerator.trackers[0].writer,
+        #             orig_hw=(validation_dataset_config.batch.image_height, validation_dataset_config.batch.image_width),
+        #         )
+        #         global_step+=1
 
-            if finetune_config.model.use_ema:
-                # Switch back to the original UNet parameters.
-                ema_unet.restore(unet.parameters())
+        #     if finetune_config.model.use_ema:
+        #         # Switch back to the original UNet parameters.
+        #         ema_unet.restore(unet.parameters())
 
-            del pipeline
-            torch.cuda.empty_cache()
+        #     del pipeline
+        #     torch.cuda.empty_cache()
 
 
 
@@ -581,26 +581,29 @@ def train_step(
 
         if "images" in batch:
             # convert images to latent space.
-            _, images = collapse_tensor_to_batch_dim(batch["images"])
+            _, latents = collapse_tensor_to_batch_dim(batch["images"])
             _, target_imgs =  collapse_tensor_to_batch_dim(batch["target_imgs"])
             target_imgs = target_imgs.squeeze(1)
             target_imgs = target_imgs[:, :3].to(weight_dtype) 
-            target_latents = vae.encode(target_imgs).latent_dist.sample()
-            target_latents = target_latents * vae.config.scaling_factor
+            # target_latents = vae.encode(target_imgs).latent_dist.sample()
+            # target_latents = target_latents * vae.config.scaling_factor
 
             images = images.squeeze(1)
             images = images[:, :3].to(weight_dtype)  # remove alpha channel
-            latents = vae.encode(images).latent_dist.sample()
-            latents = latents # * vae.config.scaling_factor
+            # latents = vae.encode(images).latent_dist.sample()
+            # latents = latents # * vae.config.scaling_factor
+
+            latents = images
+            target_latents = target_imgs
         else:
             raise ValueError("images not found in batch")
 
         # Sample a random timestep for each batch
         N = latents.shape[0]
-        f_min = 0.0  # 0.02
-        f_max = 1.0  # 0.98
-        t_min = int(f_min * noise_scheduler.config.num_train_timesteps)
-        t_max = int(f_max * noise_scheduler.config.num_train_timesteps)
+        # f_min = 0.0  # 0.02
+        # f_max = 1.0  # 0.98
+        # t_min = int(f_min * noise_scheduler.config.num_train_timesteps)
+        # t_max = int(f_max * noise_scheduler.config.num_train_timesteps)
         timesteps = torch.randint(t_min, t_max, (batch_size,), device=latents.device, dtype=torch.long)
 
         # per default: use same timestep within batch
@@ -616,40 +619,34 @@ def train_step(
             timesteps = torch.where(non_noisy_mask, torch.zeros_like(timesteps), timesteps)
 
         # Sample noise that we'll add to the latents
-        noise = torch.randn_like(latents)
+        # noise = torch.randn_like(latents)
 
-        # Add noise to the latents according to the noise magnitude at each timestep
-        # (this is the forward diffusion process)
-        noisy_latents = noise_scheduler.add_noise(target_latents, noise, timesteps)
-        noisy_latents = torch.cat([noisy_latents,latents],dim = 1)
+        # # Add noise to the latents according to the noise magnitude at each timestep
+        # # (this is the forward diffusion process)
+        # noisy_latents = noise_scheduler.add_noise(target_latents, noise, timesteps)
+        # noisy_latents = torch.cat([noisy_latents,latents],dim = 1)
 
         # convert prompt to input_ids
-        batch["input_ids"] = tokenize_captions(tokenizer, batch["prompt"]).to(latents.device)
+        # batch["input_ids"] = tokenize_captions(tokenizer, batch["prompt"]).to(latents.device)
 
         # Get the text embedding for conditioning.
-        encoder_hidden_states = text_encoder(batch["input_ids"])[0]
+        # encoder_hidden_states = text_encoder(batch["input_ids"])[0]
 
-        # Conditioning dropout to support classifier-free guidance during inference.
-        if finetune_config.model.conditioning_dropout_prob is not None:
-            random_p = torch.rand(N, device=latents.device, generator=generator)
-            # Sample masks for the edit prompts.
-            prompt_mask = random_p < 2 * finetune_config.model.conditioning_dropout_prob
-            prompt_mask = prompt_mask.reshape(N, 1, 1)
-            # Final text conditioning.
-            null_conditioning = text_encoder(tokenize_captions(tokenizer, [""]).to(accelerator.device))[0]
-            null_conditioning = null_conditioning.repeat(N, 1, 1)
-            encoder_hidden_states = torch.where(prompt_mask, null_conditioning, encoder_hidden_states)
+        # # Conditioning dropout to support classifier-free guidance during inference.
+        # if finetune_config.model.conditioning_dropout_prob is not None:
+        #     random_p = torch.rand(N, device=latents.device, generator=generator)
+        #     # Sample masks for the edit prompts.
+        #     prompt_mask = random_p < 2 * finetune_config.model.conditioning_dropout_prob
+        #     prompt_mask = prompt_mask.reshape(N, 1, 1)
+        #     # Final text conditioning.
+        #     null_conditioning = text_encoder(tokenize_captions(tokenizer, [""]).to(accelerator.device))[0]
+        #     null_conditioning = null_conditioning.repeat(N, 1, 1)
+        #     encoder_hidden_states = torch.where(prompt_mask, null_conditioning, encoder_hidden_states)
 
         # Get the target for unet-pred loss depending on the prediction type
-        if noise_scheduler.config.prediction_type == "sample":
-            unet_pred_target = latents
-        elif noise_scheduler.config.prediction_type == "epsilon":
-
-            unet_pred_target = noise
-        elif noise_scheduler.config.prediction_type == "v_prediction":
-            unet_pred_target = noise_scheduler.get_velocity(latents, noise, timesteps)
-        else:
-            raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
+        
+        unet_pred_target = target_latents
+       
 
         # Predict w/ unet
 
@@ -667,7 +664,7 @@ def train_step(
 
        
         output = unet(
-            noisy_latents,
+            latents,
             timesteps,
             encoder_hidden_states,
             cross_attention_kwargs=cross_attention_kwargs,

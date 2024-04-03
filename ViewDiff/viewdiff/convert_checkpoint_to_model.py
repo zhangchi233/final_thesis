@@ -8,15 +8,15 @@ import shutil
 from accelerate import Accelerator
 from accelerate.utils import ProjectConfiguration
 
-from .model.custom_stable_diffusion_pipeline import CustomStableDiffusionPipeline
-from .model.custom_stable_instructPix2pix_pipeline import CustomInstructPix2pixDiffusionPipeline
+from model.custom_stable_diffusion_pipeline import CustomStableDiffusionPipeline
+from model.custom_stable_instructPix2pix_pipeline import CustomInstructPix2pixDiffusionPipeline
 
-from .train_util import FinetuneConfig, unet_attn_processors_state_dict, load_models
+from train_util import FinetuneConfig, unet_attn_processors_state_dict, load_models
 from diffusers.loaders import LoraLoaderMixin
 
 from dacite import from_dict, Config
 
-from .train import update_model
+from train import update_model
 
 
 def convert_checkpoint_to_model(
@@ -128,4 +128,4 @@ def convert_checkpoint_to_model(
 
 
 if __name__ == "__main__":
-    convert_checkpoint_to_model("/root/autodl-tmp/ViewDiff/output_var_unproj/all/subset_all/input_3/train/class6/checkpoint-35000")
+    convert_checkpoint_to_model("/openbayes/home/output_var_unproj/all/subset_all/input_3/train/class6/checkpoint-30000")

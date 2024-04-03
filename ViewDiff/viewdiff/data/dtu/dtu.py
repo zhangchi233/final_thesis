@@ -414,6 +414,7 @@ class DTUDataset(Dataset):
         view_ids = [ref_view] + src_views[:self.n_views-1]
         light_input = np.random.choice(7,1)
         input_lights=[light_idx,light_idx,light_input[0]]
+        target_light = light_idx
 
         
 
@@ -444,10 +445,10 @@ class DTUDataset(Dataset):
         z_min = self.bbox[f"{scan}_train"]["z"]["min"]
         z_max = self.bbox[f"{scan}_train"]["z"]["max"]
 
-        sample['prompt'] = [f"modify the lightness of image to light_class_{target_light} style"]
+        sample['prompt'] = [f"modify the lightness of image to light_class_{light_idx} style"]
         for i, vid in enumerate(view_ids):
         # NOTE that the id in image file names is from 1 to 49 (not 0~48)
-            light_idx = input_lights[i]
+           
             img_filename = os.path.join(self.root_dir,
                             f'Rectified/{scan}_train/rect_{vid+1:03d}_{input_lights[i]}_r5000.png')
             target_filename = os.path.join(self.root_dir,
@@ -525,6 +526,7 @@ class DTUDataset(Dataset):
         sample['target_imgs'] = target_imgs
         small_mask = sample["masks"]["level_0"]
         small_wh = (80,64)
+        sample["class"] = torch.tensor([light_idx])
         sample["small_mask"] = interpolate(small_mask[None,None].float(), small_wh, mode='nearest')[0,0].byte()
 
         sample["bbox"] =torch.tensor([[x_min,y_min,z_min], 
