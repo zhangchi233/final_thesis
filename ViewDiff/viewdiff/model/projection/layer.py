@@ -82,6 +82,7 @@ class UnprojReprojLayer(nn.Module):
         self.proj_in_mode = proj_in_mode
         self.proj_out_mode = proj_out_mode
         self.n_novel_images = n_novel_images
+
         self.dim_3d_grid = dim_3d_grid
         self.use_3d_net = num_3d_layers > 0
         self.use_3d_unet = num_3d_layers >= 3
@@ -263,6 +264,7 @@ class UnprojReprojLayer(nn.Module):
         # reduce feature dim
         n_known_images = latents.shape[1] - self.n_novel_images
         features = collapse_batch(latents[:, :n_known_images])
+       
 
         if self.proj_in_mode == "unet":
             assert timestep is not None

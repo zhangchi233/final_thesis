@@ -353,8 +353,18 @@ class BasicTransformerWithCrossFrameAttentionBlock(BasicTransformerBlock):
     def unproj_reproj(self, kwargs, hidden_state: torch.Tensor):
         # reshape to image-dim (N, C, h, w)
         N, hw, C = hidden_state.shape
+        
         h = w = math.floor(math.sqrt(hw))
-        latents = hidden_state.reshape(N, h, w, C)
+        try:
+            latents = hidden_state.reshape(N, h, w, C)
+        except:
+            hw_resp = hw*0.8
+           
+            h  =math.floor(math.sqrt(hw_resp))
+
+            w  = int(1.25*h)
+            latents = hidden_state.reshape(N, h, w, C)
+
         latents = latents.permute(0, 3, 1, 2)
 
         # reshape to batches of n_images: (batches_of_frames, self.n_input_images, C, h, w)
@@ -468,6 +478,7 @@ class BasicTransformerWithCrossFrameAttentionBlock(BasicTransformerBlock):
             if self.use_unproj_reproj:
                 # Unproj-Reproj (after cross-frame-attention or stand-alone)
                 attn_output = self.unproj_reproj(unproj_reproj_kwargs, attn_output)
+               
 
             # normalize
             if self.use_ada_layer_norm_zero:

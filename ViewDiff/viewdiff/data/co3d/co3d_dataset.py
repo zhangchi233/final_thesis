@@ -25,9 +25,8 @@ import sys
 import os
 path = os.getcwd()
 print(path)
-workdir = "workspace"
-sys.path.append(f"/{workdir}/ViewDiff/viewdiff/data/co3d/")
-from util import (
+
+from .util import (
     get_dataset,
     has_pointcloud,
     get_crop_around_mask,
