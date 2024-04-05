@@ -206,12 +206,12 @@ class CrossFrameAttentionProcessor2_0(torch.nn.Module):
 
         if use_lora_in_cfa:
             # prepare pose_cond for lora
+           
             pose_cond = (
                 pose_cond[:, None, :]
                 .repeat(1, hidden_states.shape[1], 1)
                 .to(device=hidden_states.device, dtype=hidden_states.dtype)
             )
-
             lora_cond = [hidden_states, pose_cond]
 
             # prepare temb for lora

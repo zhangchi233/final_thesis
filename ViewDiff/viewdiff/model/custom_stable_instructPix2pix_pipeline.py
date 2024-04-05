@@ -339,6 +339,7 @@ class CustomInstructPix2pixDiffusionPipeline(
         if prompt_embeds is None:
             # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
+                
                 prompt = self.maybe_convert_prompt(prompt, self.tokenizer)
 
             text_inputs = self.tokenizer(
@@ -749,6 +750,7 @@ class CustomInstructPix2pixDiffusionPipeline(
             lora_scale=text_encoder_lora_scale,
         )
         
+
         image_latents = self.prepare_image_latents(
             known_images,
             batch_size,
@@ -808,7 +810,7 @@ class CustomInstructPix2pixDiffusionPipeline(
                     encoder_hidden_states=prompt_embeds,
                     cross_attention_kwargs=cross_attention_kwargs,
                     return_dict=True,
-                    n_known_images= 0,
+                    n_known_images=n_known_images if known_images is not None else 0,
                     n_images_per_batch=n_images_per_batch if known_images is not None else 0,
                 )
                 model_pred = output.unet_sample
@@ -827,10 +829,10 @@ class CustomInstructPix2pixDiffusionPipeline(
                 #     model_pred = rescale_noise_cfg(model_pred, noise_pred_text,noise_pred_image, guidance_rescale=0.0)
 
                 # compute the previous noisy sample x_t -> x_t-1
-                # if known_images is not None:
-                #     latents[n_known_images:] = self.scheduler.step(model_pred[n_known_images:], t, latents[n_known_images:], **extra_step_kwargs, return_dict=False)[0]
-                # else:
-                latents = self.scheduler.step(model_pred, t, latents, **extra_step_kwargs, return_dict=False)[0]
+                if known_images is not None:
+                    latents[n_known_images:] = self.scheduler.step(model_pred[n_known_images:], t, latents[n_known_images:], **extra_step_kwargs, return_dict=False)[0]
+                else:
+                    latents = self.scheduler.step(model_pred, t, latents, **extra_step_kwargs, return_dict=False)[0]
 
                 # save for logging
                 rendered_depth_per_layer_list.append(output.rendered_depth)

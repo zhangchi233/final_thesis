@@ -22,13 +22,13 @@ from diffusers import (
 )
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from viewdiff.model.custom_unet_2d_condition import (
+from model.custom_unet_2d_condition import (
     UNet2DConditionCrossFrameInExistingAttnModel,
     get_down_block_types,
     get_mid_block_type,
     get_up_block_types,
 )
-from viewdiff.model.util import (
+from model.util import (
     replace_self_attention_with_cross_frame_attention,
     update_last_layer_mode,
     update_vol_rend_inject_noise_sigma,
@@ -44,9 +44,9 @@ from viewdiff.model.util import (
     CrossFrameAttentionConfig,
     build_cross_attention_kwargs,
 )
-from viewdiff.model.custom_stable_diffusion_pipeline import CustomStableDiffusionPipeline
+from model.custom_stable_diffusion_pipeline import CustomStableDiffusionPipeline
 
-from viewdiff.io_util import (
+from io_util import (
     make_image_grid,
     norm_0_1,
     setup_output_directories,
@@ -54,7 +54,7 @@ from viewdiff.io_util import (
     save_inference_outputs,
     IOConfig,
 )
-from viewdiff.train_util import (
+from train_util import (
     check_local_rank,
     FinetuneConfig,
     load_models,
@@ -66,13 +66,13 @@ from viewdiff.train_util import (
     maybe_continue_training,
 )
 
-from viewdiff.metrics.image_metrics import calc_psnr_ssim_lpips
+from metrics.image_metrics import calc_psnr_ssim_lpips
 
-from viewdiff.data.co3d.co3d_dataset import CO3DConfig
-from viewdiff.data.dtu.dtu import DTUConfig
+from data.co3d.co3d_dataset import CO3DConfig
+from data.dtu.dtu import DTUConfig
 
 
-from viewdiff.scripts.misc.create_masked_images import remove_background
+from scripts.misc.create_masked_images import remove_background
 
 
 logger = get_logger(__name__, log_level="INFO")

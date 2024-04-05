@@ -184,6 +184,9 @@ class DTUConfig:
     threshold: Optional[int] = 0.8
     prompt_dir: Optional[str] = f"/{ROOTDIR}/mvs_training/dtu/co3d_blip2_captions_final.json"
     debug: Optional[int] = 0
+    light_strength: int =  200
+    light_gamma: int =  1.2
+    
 
 class DTUDataset(Dataset):
     def __init__(self, config: DTUConfig):
@@ -197,6 +200,7 @@ class DTUDataset(Dataset):
             'split must be either "train", "val" or "test"!'
         
         
+        
         self.light_class = config.target_light
         self.img_wh = (config.batch.image_width, config.batch.image_height)
         if config.img_wh is not None:
@@ -205,8 +209,8 @@ class DTUDataset(Dataset):
             assert self.img_wh[0]%32==0 and self.img_wh[1]%32==0, \
                 'img_wh must both be multiples of 32!'
         self.debug = config.debug
+        self.read_bbox()
         self.threshold = config.threshold
-        self.readbbox()
         self.build_metas()
         self.n_views = config.n_views
         self.levels = config.levels # FPN levels
@@ -265,15 +269,18 @@ class DTUDataset(Dataset):
                         output_key = f"{scan}_{ref_view}_{src_views[0]}_{src_views[1]}"
                         losses = self.output_pkl[output_key]
                         if self.split=="train":
-                            self.metas += [(scan, ref_view,light_idx, src_views,int(np.argmin(losses)))]
+                            if self.debug ==1:
+                                if scan == "scan105":
+                                    self.metas += [(scan, ref_view,light_idx, src_views,int(np.argmin(losses)))]
+                            else:                               
+                                self.metas += [(scan, ref_view,light_idx, src_views,int(np.argmin(losses)))]
                         elif self.split!="train":
                             if light_idx!=0 or scan !="scan106":
                                 continue
                             else:
                                 self.metas += [(scan, ref_view,light_idx, src_views,int(np.argmin(losses)))]
                                
-        if self.debug==1:
-            self.metas = self.metas[:3]   
+        
                            
                          
     def build_proj_mats(self):
@@ -318,12 +325,7 @@ class DTUDataset(Dataset):
         # depth_min & depth_interval: line 11
         depth_min = float(lines[11].split()[0])
         return intrinsics, extrinsics, depth_min
-    def readbbox(self):
-        bbox_file = os.path.join(self.root_dir, 'bbox.pkl')
-        import pickle
-        with open(bbox_file, 'rb') as f:
-            bboxes = pickle.load(f)
-        self.bboxes = bboxes
+
     def read_depth(self, filename):
         depth = np.array(read_pfm(filename)[0], dtype=np.float32) # (1200, 1600)
         if self.img_wh is None:
@@ -355,11 +357,13 @@ class DTUDataset(Dataset):
             mask_0 = cv2.resize(mask, self.img_wh,
                                 interpolation=cv2.INTER_NEAREST)
         mask_1 = cv2.resize(mask_0, None, fx=0.5, fy=0.5,
-                            interpolation=cv2.INTER_NEAREST)
+                            interpolation=cv2.INTER_NEAREST)   # 
         mask_2 = cv2.resize(mask_1, None, fx=0.5, fy=0.5,
                             interpolation=cv2.INTER_NEAREST)
+
         mask_3 = cv2.resize(mask_2, None, fx=0.5, fy=0.5,
                             interpolation=cv2.INTER_NEAREST)
+
 
         masks = {"level_0": torch.BoolTensor(mask_0),
                  "level_1": torch.BoolTensor(mask_1),
@@ -367,6 +371,13 @@ class DTUDataset(Dataset):
                  "level_3": torch.BoolTensor(mask_3)}
 
         return masks
+    def read_bbox(self):
+        import pickle as pkl
+        bbox_path = os.path.join(self.root_dir,"bbox.pkl")
+        with open(bbox_path, 'rb') as f:
+            bbox = pkl.load(f)
+        self.bbox = bbox
+
 
     def define_transforms(self):
         if self.split == 'train': # you can add augmentation here
@@ -404,13 +415,16 @@ class DTUDataset(Dataset):
        
         scan, ref_view,light_idx, src_views,target_light = self.metas[idx]
         # use only the reference view and first nviews-1 source views
+        # shuffle the source views
+
         view_ids = [ref_view] + src_views[:self.n_views-1]
-        lights = [0,1,2,3,4,5,6]
-        lights.remove(light_idx)
-        light_inputs = np.random.choice(lights,1)
-        input_lights = [light_idx,light_idx,light_inputs[0]]
-        
-        signs = light_idx - light_inputs[0]
+        light_input = np.random.choice(7,1)
+        light_bright_sign = light_input[0] - light_idx
+        input_lights=np.random.choice(7,3)
+       
+        target_light = target_light
+
+
 
         # output_key = f"{scan}_{ref_view}_{src_views[0]}_{src_views[1]}"
         # if self.total_pkl:
@@ -419,16 +433,6 @@ class DTUDataset(Dataset):
         # else:
         #     target_light = self.output_pkl[output_key]
         #     target_light = np.argmin(target_light)
-        scan_key = f"{scan}_train"
-        x_min = self.bboxes[scan_key]["x"]["min"]
-        x_max = self.bboxes[scan_key]["x"]["max"]
-        y_min = self.bboxes[scan_key]["y"]["min"]
-        y_max = self.bboxes[scan_key]["y"]["max"]
-        z_min = self.bboxes[scan_key]["z"]["min"]
-        z_max = self.bboxes[scan_key]["z"]["max"]
-
-
-
 
         
 
@@ -441,15 +445,22 @@ class DTUDataset(Dataset):
         Rs = []
         intensity_stats =[]
         prompt = str(np.random.choice(self.prompt_dir[scan][str(ref_view)],1)[0])
-      
+
+        x_min = self.bbox[f"{scan}_train"]["x"]["min"]
+        x_max = self.bbox[f"{scan}_train"]["x"]["max"]
+        y_min = self.bbox[f"{scan}_train"]["y"]["min"]
+        y_max = self.bbox[f"{scan}_train"]["y"]["max"]
+        z_min = self.bbox[f"{scan}_train"]["z"]["min"]
+        z_max = self.bbox[f"{scan}_train"]["z"]["max"]
+
         sample['prompt'] = [f"modify the lightness of image to light_class_{light_idx} style"]
         for i, vid in enumerate(view_ids):
         # NOTE that the id in image file names is from 1 to 49 (not 0~48)
-            
+           
             img_filename = os.path.join(self.root_dir,
                             f'Rectified/{scan}_train/rect_{vid+1:03d}_{input_lights[i]}_r5000.png')
             target_filename = os.path.join(self.root_dir,
-                            f'Rectified/{scan}_train/rect_{vid+1:03d}_{light_idx}_r5000.png')
+                            f'Rectified/{scan}_train/rect_{vid+1:03d}_{target_light}_r5000.png')
             mask_filename = os.path.join(self.root_dir,
                             f'Depths/{scan}/depth_visual_{vid:04d}.png')
             depth_filename = os.path.join(self.root_dir,
@@ -461,7 +472,20 @@ class DTUDataset(Dataset):
             if self.img_wh is not None:
                 img = img.resize(self.img_wh, Image.BILINEAR)
                 target_img = target_img.resize(self.img_wh, Image.BILINEAR)
-                
+            if input_lights[i] != target_light:
+                # make image brighter or darker
+                img = np.array(img)
+                if input_lights[i] > target_light:
+                    # increase contrast and the image looks 
+                    alpha = np.random.uniform(1.5, 2.5)
+                    beta = np.random.uniform(10, 30)
+                    img = cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
+                else:
+                    alpha = np.random.uniform(0.15, 0.75)
+                    beta = np.random.uniform(-30, -10)
+                    img = cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
+                    
+                  
 
             img = self.transform(img)
             target_img = self.transform(target_img)
@@ -507,13 +531,10 @@ class DTUDataset(Dataset):
         imgs = self.unpreprocess(imgs)
         target_imgs = self.unpreprocess(target_imgs)
         
+        
         img_mask = (imgs-target_imgs).abs().mean(1,keepdim=True).repeat(1,3,1,1)
 
-        if signs>0:
-            imgs[img_mask>self.threshold] *= 0.12
-        else:
-            imgs[img_mask>self.threshold] *= 2.12
-            imgs.clamp_(0,1)
+
 
        
         Ks = np.stack(Ks)
@@ -521,6 +542,7 @@ class DTUDataset(Dataset):
         sample['pose'] = Rs
         sample['K'] = Ks
         sample['images'] = imgs
+        
         
 
         sample["intensity_stats"] = torch.stack(intensity_stats)
@@ -532,10 +554,12 @@ class DTUDataset(Dataset):
         sample['target_imgs'] = target_imgs
         small_mask = sample["masks"]["level_0"]
         small_wh = (80,64)
+        sample["class"] = torch.tensor([light_idx])
         sample["small_mask"] = interpolate(small_mask[None,None].float(), small_wh, mode='nearest')[0,0].byte()
 
-        sample["bbox"] =torch.tensor([[x_min, y_min, z_min],
-                                     [x_max,y_max,z_max]], dtype=torch.float32)
+        sample["bbox"] =torch.tensor([[x_min,y_min,z_min], 
+                                      [x_max,y_max,z_max]], dtype=torch.float32)
+
 
 
 

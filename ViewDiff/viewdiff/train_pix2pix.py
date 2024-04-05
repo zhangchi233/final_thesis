@@ -77,7 +77,7 @@ from torch.utils.tensorboard import SummaryWriter
 # define logger path
 logger_path = os.path.join(os.path.dirname(__file__), "..", "logs")
 # define tensorboard writer
-writer = SummaryWriter("/root/tf-logs")
+writer = SummaryWriter("/openbayes/tf_dir")
 
 
 
@@ -352,30 +352,30 @@ def train_and_test(
             
 
             # accumulate losses for logging across gradient_accumulation_steps
-            for k, v in avg_step_losses.items():
-                if k not in train_losses:
-                    train_losses[k] = 0.0
-                train_losses[k] += v
+            # for k, v in avg_step_losses.items():
+            #     if k not in train_losses:
+            #         train_losses[k] = 0.0
+            #     train_losses[k] += v
 
-            # accumulate accs for logging across gradient_accumulation_steps
-            if "timesteps" in acc_step:
-                timesteps = acc_step["timesteps"]
-                for k, v in acc_step.items():
-                    if "timesteps" in k:
-                        continue
+            # # accumulate accs for logging across gradient_accumulation_steps
+            # if "timesteps" in acc_step:
+            #     timesteps = acc_step["timesteps"]
+            #     for k, v in acc_step.items():
+            #         if "timesteps" in k:
+            #             continue
 
-                    # mean acc (averaged across timesteps for logging per step)
-                    if k not in train_accs:
-                        train_accs[k] = 0.0
-                    train_accs[k] += v.mean().item() / accelerator.gradient_accumulation_steps
+            #         # mean acc (averaged across timesteps for logging per step)
+            #         if k not in train_accs:
+            #             train_accs[k] = 0.0
+            #         train_accs[k] += v.mean().item() / accelerator.gradient_accumulation_steps
 
-                    # per-timestep acc (averaged across steps for logging per timestep)
-                    if k not in acc_per_timestep:
-                        acc_per_timestep[k] = {t: (0, 0) for t in range(1000)}
-                    for idx in range(v.shape[0]):
-                        t = timesteps[idx].item()
-                        prev_val, prev_count = acc_per_timestep[k][t]
-                        acc_per_timestep[k][t] = (prev_val + v[idx].item(), prev_count + 1)
+            #         # per-timestep acc (averaged across steps for logging per timestep)
+            #         if k not in acc_per_timestep:
+            #             acc_per_timestep[k] = {t: (0, 0) for t in range(1000)}
+            #         for idx in range(v.shape[0]):
+            #             t = timesteps[idx].item()
+            #             prev_val, prev_count = acc_per_timestep[k][t]
+            #             acc_per_timestep[k][t] = (prev_val + v[idx].item(), prev_count + 1)
 
             # Checks if the accelerator has performed an optimization step behind the scenes (e.g. when gradient_accumulation_steps are reached)
             if accelerator.sync_gradients:
@@ -543,12 +543,20 @@ def train_step(
         batch["target_imgs"] = 2*batch["target_imgs"]-1
         
         batch["prompt"] = collapse_prompt_to_batch_dim(batch["prompt"], finetune_config.model.n_input_images)
-        prompts= []
-        for prompt in batch["prompt"]:
-            prompts.extend(list(prompt))
-        batch["prompt"] = prompts
-        #batch["prompt"] *= finetune_config.model.n_input_images 
        
+
+
+
+
+        prompts= []
+        for i in range(len(batch["prompt"][0])):
+            for prompt in batch["prompt"]:
+                prompts.append(prompt[i])
+        batch["prompt"] = prompts
+        print(batch["prompt"])
+        
+        
+
         batch_size, pose = collapse_tensor_to_batch_dim(batch["pose"])
         
         _, K = collapse_tensor_to_batch_dim(batch["K"])
@@ -579,7 +587,7 @@ def train_step(
             # convert images to latent space.
             _, images = collapse_tensor_to_batch_dim(batch["images"])
             _, target_imgs =  collapse_tensor_to_batch_dim(batch["target_imgs"])
-            target_imgs = images.squeeze(1)
+            target_imgs = target_imgs.squeeze(1)
             target_imgs = target_imgs[:, :3].to(weight_dtype) 
             target_latents = vae.encode(target_imgs).latent_dist.sample()
             target_latents = target_latents * vae.config.scaling_factor
@@ -633,7 +641,7 @@ def train_step(
             prompt_mask = prompt_mask.reshape(N, 1, 1)
             # Final text conditioning.
             null_conditioning = text_encoder(tokenize_captions(tokenizer, [""]).to(accelerator.device))[0]
-            print(null_conditioning.shape,encoder_hidden_states.shape,prompt_mask.shape)
+            null_conditioning = null_conditioning.repeat(N, 1, 1)
             encoder_hidden_states = torch.where(prompt_mask, null_conditioning, encoder_hidden_states)
 
         # Get the target for unet-pred loss depending on the prediction type
@@ -668,7 +676,9 @@ def train_step(
             encoder_hidden_states,
             cross_attention_kwargs=cross_attention_kwargs,
         )
+       
         unet_pred = output.unet_sample
+       
         rendered_depth_per_layer = output.rendered_depth
         rendered_mask_per_layer = output.rendered_mask
 
@@ -683,9 +693,9 @@ def train_step(
         small_mask = small_mask.repeat(finetune_config.model.n_input_images,4, 1, 1)
         
    
-        unet_pred_acc = F.mse_loss(unet_pred.float(), unet_pred_target.float(), reduction="none")
-        loss = unet_pred_acc[small_mask].mean()
-        unet_pred_acc = unet_pred_acc.mean(dim=(1, 2, 3))
+        unet_pred_acc = F.mse_loss(unet_pred[small_mask].float(), unet_pred_target[small_mask].float(), reduction="none")
+        loss = unet_pred_acc.mean()
+        unet_pred_acc = unet_pred_acc.mean()
 
         if is_dreambooth:
             loss = finetune_config.training.dreambooth_prior_preservation_loss_weight * loss
@@ -847,9 +857,11 @@ def test_step(
 
     batch["images"] = 2*batch["images"]-1
     batch["target_imgs"] = 2*batch["target_imgs"]-1
+    
     # parse batch
     # collapse K dimension into batch dimension (no concatenation happening)
     batch["prompt"] = [cap[0] for cap in batch["prompt"]]
+    
     prompt = collapse_prompt_to_batch_dim(batch["prompt"], model_config.n_input_images)
    
     
@@ -870,7 +882,7 @@ def test_step(
         _, known_images = collapse_tensor_to_batch_dim(batch["images"])
         known_images = known_images.to(pipeline.device)
         known_images = known_images.squeeze(1)
-        print(known_images.shape)
+      
 
     pose = pose.to(pipeline.device)
     K = K.to(pipeline.device)
