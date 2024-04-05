@@ -1,6 +1,6 @@
 from torch.utils.data import Dataset
 import sys
-ROOTDIR = "root/autodl-tmp"
+ROOTDIR = "workspace"
 sys.path.append(f'/{ROOTDIR}/project/dp_simple/')
 from CasMVSNet_pl.datasets.utils import read_pfm
 import os
@@ -418,8 +418,8 @@ class DTUDataset(Dataset):
         # shuffle the source views
 
         view_ids = [ref_view] + src_views[:self.n_views-1]
-        light_input = np.random.choice(7,1)
-        light_bright_sign = light_input[0] - light_idx
+        
+        light_bright_sign = target_light - light_idx
         input_lights=np.random.choice(7,3)
        
         target_light = target_light
@@ -458,7 +458,7 @@ class DTUDataset(Dataset):
         # NOTE that the id in image file names is from 1 to 49 (not 0~48)
            
             img_filename = os.path.join(self.root_dir,
-                            f'Rectified/{scan}_train/rect_{vid+1:03d}_{input_lights[i]}_r5000.png')
+                            f'Rectified/{scan}_train/rect_{vid+1:03d}_{light_idx}_r5000.png')
             target_filename = os.path.join(self.root_dir,
                             f'Rectified/{scan}_train/rect_{vid+1:03d}_{target_light}_r5000.png')
             mask_filename = os.path.join(self.root_dir,
@@ -472,18 +472,18 @@ class DTUDataset(Dataset):
             if self.img_wh is not None:
                 img = img.resize(self.img_wh, Image.BILINEAR)
                 target_img = target_img.resize(self.img_wh, Image.BILINEAR)
-            if input_lights[i] != target_light:
-                # make image brighter or darker
-                img = np.array(img)
-                if input_lights[i] > target_light:
-                    # increase contrast and the image looks 
-                    alpha = np.random.uniform(1.5, 2.5)
-                    beta = np.random.uniform(10, 30)
-                    img = cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
-                else:
-                    alpha = np.random.uniform(0.15, 0.75)
-                    beta = np.random.uniform(-30, -10)
-                    img = cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
+            
+            # make image brighter or darker
+            img = np.array(img)
+            if input_lights[i] > target_light:
+                # increase contrast and the image looks 
+                alpha = np.random.uniform(1, 2)
+                beta = np.random.uniform(0,15)
+                img = cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
+            else:
+                alpha = np.random.uniform(0.5, 1)
+                beta = np.random.uniform(-15,0)
+                img = cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
                     
                   
 

@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # Train pix2pix script
-#   --finetune-config.io.resume_from_checkpoint "latest" \
+# --finetune-config.io.resume_from_checkpoint "latest" \
 python -m accelerate.commands.launch \
-  /root/autodl-tmp/ViewDiff/viewdiff/train_pix2pix.py \
+  /workspace/ViewDiff/viewdiff/train_pix2pix.py \
   --finetune-config.io.pretrained_model_name_or_path timbrooks/instruct-pix2pix \
-  --finetune-config.io.output_dir /root/autodl-tmp/output_var_unproj \
+  --finetune-config.io.output_dir /workspace/output_var_unproj \
   --finetune-config.io.experiment_name class6 \
   --finetune-config.training.mixed_precision bf16 \
   --finetune-config.training.dataloader_num_workers 4 \
@@ -17,7 +17,7 @@ python -m accelerate.commands.launch \
   --finetune_config.training.max_num_images_not_noisy 2 \
   --finetune_config.training.validation_epochs 1 \
   --finetune_config.training.dreambooth_prior_preservation_every_nth -1 \
-  --finetune-config.optimizer.learning_rate 7e-5 \
+  --finetune-config.optimizer.learning_rate 1e-4 \
   --finetune-config.optimizer.vol_rend_learning_rate 1e-3 \
   --finetune-config.optimizer.vol_rend_adam_weight_decay 0.0 \
   --finetune-config.optimizer.gradient_accumulation_steps 1 \
@@ -44,13 +44,12 @@ python -m accelerate.commands.launch \
   --finetune-config.model.pose_cond_coord_space absolute \
   --finetune-config.model.pose_cond_lora_rank 64 \
   --finetune-config.model.n_input_images 3 \
-  --dataset-config.root-dir /root/autodl-tmp/mvs_training/dtu \
+  --dataset-config.root-dir /workspace/mvs_training/dtu \
   --dataset-config.threshold 0.8 \
   --dataset-config.split train \
   --dataset-config.img_wh 512\
   --dataset-config.debug 0\
   --validation-dataset-config.debug 0\
-  --validation-dataset-config.root-dir /root/autodl-tmp/mvs_training/dtu \
+  --validation-dataset-config.root-dir /workspace/mvs_training/dtu \
   --validation-dataset-config.split val \
-  --validation-dataset-config.threshold 0.8\
-
+  --validation-dataset-config.threshold 0.8
