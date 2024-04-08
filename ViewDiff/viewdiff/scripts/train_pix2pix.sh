@@ -6,6 +6,7 @@ python -m accelerate.commands.launch \
   /root/autodl-tmp/ViewDiff/viewdiff/train_pix2pix.py \
   --finetune-config.io.pretrained_model_name_or_path timbrooks/instruct-pix2pix \
   --finetune-config.io.output_dir /root/autodl-tmp/output_var_unproj \
+  --finetune-config.io.resume_from_checkpoint "latest" \
   --finetune-config.io.experiment_name class6 \
   --finetune-config.training.mixed_precision bf16 \
   --finetune-config.training.dataloader_num_workers 4 \
