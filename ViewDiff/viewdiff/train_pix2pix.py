@@ -265,7 +265,7 @@ def train_and_test(
                     prefix="Validation",
                     global_step=global_step,
                     writer=accelerator.trackers[0].writer,
-                    orig_hw=(validation_dataset_config.batch.image_height, validation_dataset_config.batch.image_width),
+                    orig_hw=(),
                 )
                 global_step+=1
 
@@ -552,6 +552,7 @@ def train_step(
         for prompt in batch["prompt"]:
             prompts.extend(list(prompt))
         batch["prompt"] = prompts
+        print(prompts)
       
         batch_size, pose = collapse_tensor_to_batch_dim(batch["pose"])
         

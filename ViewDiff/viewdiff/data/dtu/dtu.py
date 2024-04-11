@@ -198,7 +198,7 @@ class DTUDataset(Dataset):
         
         
         self.light_class = config.target_light
-        self.img_wh = (config.batch.image_width, config.batch.image_height)
+        self.img_wh = None
         if config.img_wh is not None:
             if type(config.img_wh) is int:
                 self.img_wh = (config.img_wh, config.img_wh)
@@ -324,11 +324,11 @@ class DTUDataset(Dataset):
 
     def read_depth(self, filename):
         depth = np.array(read_pfm(filename)[0], dtype=np.float32) # (1200, 1600)
-        if self.img_wh is None:
-            depth = cv2.resize(depth, None, fx=0.5, fy=0.5,
-                            interpolation=cv2.INTER_NEAREST) # (600, 800)
-            depth_0 = depth[44:556, 80:720] # (512, 640)
-        else:
+        
+        depth = cv2.resize(depth, None, fx=0.5, fy=0.5,
+                        interpolation=cv2.INTER_NEAREST) # (600, 800)
+        depth_0 = depth[44:556, 80:720] # (512, 640)
+        if self.img_wh is not None:
             depth_0 = cv2.resize(depth, self.img_wh,
                                  interpolation=cv2.INTER_NEAREST)
         depth_1 = cv2.resize(depth_0, None, fx=0.5, fy=0.5,
@@ -345,11 +345,11 @@ class DTUDataset(Dataset):
     def read_mask(self, filename):
         mask = cv2.imread(filename, 0) # (1200, 1600)
        
-        if self.img_wh is None:
-            mask = cv2.resize(mask, None, fx=0.5, fy=0.5,
-                            interpolation=cv2.INTER_NEAREST) # (600, 800)
-            mask_0 = mask[44:556, 80:720] # (512, 640)
-        else:
+        
+        mask = cv2.resize(mask, None, fx=0.5, fy=0.5,
+                        interpolation=cv2.INTER_NEAREST) # (600, 800)
+        mask_0 = mask[44:556, 80:720] # (512, 640)
+        if self.img_wh is not None:
             mask_0 = cv2.resize(mask, self.img_wh,
                                 interpolation=cv2.INTER_NEAREST)
         mask_1 = cv2.resize(mask_0, None, fx=0.5, fy=0.5,
@@ -413,8 +413,8 @@ class DTUDataset(Dataset):
         # use only the reference view and first nviews-1 source views
         view_ids = [ref_view] + src_views[:self.n_views-1]
         light_input = np.random.choice(7,1)
-        input_lights=[light_idx,light_idx,light_input[0]]
-        target_light = light_idx
+        input_lights=[light_idx,light_idx,light_idx]
+        target_light = target_light
 
         
 
@@ -445,7 +445,7 @@ class DTUDataset(Dataset):
         z_min = self.bbox[f"{scan}_train"]["z"]["min"]
         z_max = self.bbox[f"{scan}_train"]["z"]["max"]
 
-        sample['prompt'] = [f"modify the lightness of image to light_class_{light_idx} style"]
+        sample['prompt'] = [f"modify the lightness of image by {target_light-light_input} scale"]
         for i, vid in enumerate(view_ids):
         # NOTE that the id in image file names is from 1 to 49 (not 0~48)
            
@@ -464,6 +464,18 @@ class DTUDataset(Dataset):
             if self.img_wh is not None:
                 img = img.resize(self.img_wh, Image.BILINEAR)
                 target_img = target_img.resize(self.img_wh, Image.BILINEAR)
+            if input_lights[i]>target_light:
+                # reduce contrastness and reduce light
+                alpha = np.random.uniform(0.8, 1.0)
+                beta = np.random.uniform(-10, 0)
+                img = cv2.convertScaleAbs(np.array(img), alpha=0.5, beta=0.5)
+            else:
+                # increase contrastness and increase light
+                alpha = np.random.uniform(1, 1.2)
+                beta = np.random.uniform(0, 10)
+                img = cv2.convertScaleAbs(np.array(img), alpha=1.5, beta=1.5)
+            
+            
                 
 
             img = self.transform(img)
@@ -500,6 +512,7 @@ class DTUDataset(Dataset):
             var, mean = torch.var_mean(img)
             intensity_stat = torch.stack([mean, var], dim=0)
             intensity_stats.append(intensity_stat)
+            # ad
     
     
         imgs = torch.stack(imgs) # (V, 3, H, W)

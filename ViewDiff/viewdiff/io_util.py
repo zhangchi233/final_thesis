@@ -16,9 +16,9 @@ from torch.nn.functional import interpolate
 
 from torchvision.utils import make_grid
 
-from .data.co3d.co3d_dataset import CO3DConfig
-from .data.dtu.dtu import DTUConfig
-from .data.create_video_from_image_folder import main as create_video_from_image_folder
+from data.co3d.co3d_dataset import CO3DConfig
+from data.dtu.dtu import DTUConfig
+from data.create_video_from_image_folder import main as create_video_from_image_folder
 from torchvision.utils import save_image
 
 @dataclass
@@ -73,7 +73,7 @@ class IOConfig:
     checkpoints_total_limit: int = 2
     """Max number of checkpoints to store."""
 
-    resume_from_checkpoint: Union[str,bool] = "latest"
+    resume_from_checkpoint: Union[str,bool] = False
     """Whether training should be resumed from a previous checkpoint. Use a path saved by
         ' `--checkpointing_steps`, or `"latest"` to automatically select the last available checkpoint."""
 

@@ -3,9 +3,9 @@
 # Train pix2pix script
 
 python -m accelerate.commands.launch \
-  /openbayes/home/train_pix2pix.py \
+  /openbayes/input/input0/ViewDiff/viewdiff/train_pix2pix.py \
   --finetune-config.io.pretrained_model_name_or_path timbrooks/instruct-pix2pix \
-  --finetune-config.io.output_dir /openbayes/home/output_var_unproj \
+  --finetune-config.io.output_dir /openbayes/home/output_var_unproj_low_high \
   --finetune-config.io.experiment_name class6 \
   --finetune-config.training.mixed_precision bf16 \
   --finetune-config.training.dataloader_num_workers 4 \
