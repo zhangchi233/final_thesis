@@ -389,6 +389,7 @@ class BasicTransformerWithCrossFrameAttentionBlock(BasicTransformerBlock):
         # save rendered mask & depth for logging --> already convert to cpu
         if "rendered_depth" not in kwargs:
             kwargs["rendered_depth"] = []
+        
         kwargs["rendered_depth"].append(unproj_reproj_depth.detach().cpu())
         if "rendered_mask" not in kwargs:
             kwargs["rendered_mask"] = []

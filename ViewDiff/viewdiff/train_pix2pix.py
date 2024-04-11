@@ -22,13 +22,13 @@ from diffusers import (
 )
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from viewdiff.model.custom_unet_2d_condition import (
+from model.custom_unet_2d_condition import (
     UNet2DConditionCrossFrameInExistingAttnModel,
     get_down_block_types,
     get_mid_block_type,
     get_up_block_types,
 )
-from viewdiff.model.util import (
+from model.util import (
     replace_self_attention_with_cross_frame_attention,
     update_last_layer_mode,
     update_vol_rend_inject_noise_sigma,
@@ -44,9 +44,9 @@ from viewdiff.model.util import (
     CrossFrameAttentionConfig,
     build_cross_attention_kwargs,
 )
-from viewdiff.model.custom_stable_instructPix2pix_pipeline import CustomInstructPix2pixDiffusionPipeline
+from model.custom_stable_instructPix2pix_pipeline import CustomInstructPix2pixDiffusionPipeline
 
-from viewdiff.io_util import (
+from io_util import (
     make_image_grid,
     norm_0_1,
     setup_output_directories,
@@ -54,7 +54,7 @@ from viewdiff.io_util import (
     save_inference_outputs,
     IOConfig,
 )
-from viewdiff.train_util import (
+from train_util import (
     check_local_rank,
     FinetuneConfig,
     load_models,
@@ -66,12 +66,12 @@ from viewdiff.train_util import (
     maybe_continue_training,
 )
 
-from viewdiff.metrics.image_metrics import calc_psnr_ssim_lpips
+from metrics.image_metrics import calc_psnr_ssim_lpips
 
-from viewdiff.data.co3d.co3d_dataset import CO3DConfig
-from viewdiff.data.dtu.dtu import DTUConfig,DTUDataset
+from data.co3d.co3d_dataset import CO3DConfig
+from data.dtu.dtu import DTUConfig,DTUDataset
 
-from viewdiff.scripts.misc.create_masked_images import remove_background
+from scripts.misc.create_masked_images import remove_background
 # define tensorboard logger
 from torch.utils.tensorboard import SummaryWriter
 # define logger path
@@ -553,7 +553,7 @@ def train_step(
             for prompt in batch["prompt"]:
                 prompts.append(prompt[i])
         batch["prompt"] = prompts
-        print(batch["prompt"])
+        
         
         
 
@@ -689,11 +689,22 @@ def train_step(
             unet_pred_target[non_noisy_mask] = unet_pred[non_noisy_mask].detach().clone().to(unet_pred_target)
 
         # compute unet-pred-loss
-        small_mask = batch["masks"]["level_3"].unsqueeze(1)
-        small_mask = small_mask.repeat(finetune_config.model.n_input_images,4, 1, 1)
+        # try:
+        small_mask = batch["small_mask"]
         
-   
+        batch_size, k = small_mask.shape[:2]
+        # change dtype of small_mask to bool
+        small_mask = small_mask.view(batch_size * k, *small_mask.shape[2:]).bool()
+
+      
+
+        small_mask = small_mask.repeat(1,4, 1, 1)
+    
+
         unet_pred_acc = F.mse_loss(unet_pred[small_mask].float(), unet_pred_target[small_mask].float(), reduction="none")
+        print("use_small_mask ","mask shape:", small_mask.shape)
+        # except:
+        #     unet_pred_acc = F.mse_loss(unet_pred.float(), unet_pred_target.float(), reduction="none")
         loss = unet_pred_acc.mean()
         unet_pred_acc = unet_pred_acc.mean()
 

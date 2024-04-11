@@ -37,6 +37,113 @@ import os
 path = os.getcwd()
 print(path)
 
+import cv2
+import numpy as np
+import random
+def filter_flare(image_path):
+    # Load the lens flare image
+    flare_image_path = image_path
+    flare_image = cv2.imread(flare_image_path)
+
+    # Since the flare is brighter than the surroundings, we can filter it out using thresholding
+    # Convert the image to grayscale
+
+    gray_flare = cv2.cvtColor(flare_image, cv2.COLOR_BGR2GRAY)
+
+    # Apply a Gaussian blur to the image to reduce noise
+    
+    
+    # Use a threshold to create a mask where the bright regions (presumably the flare) are white
+    _, flare_mask = cv2.threshold(gray_flare, 20, 255, cv2.THRESH_BINARY)
+
+    # Apply the mask to get only the flare
+    flare_only = cv2.bitwise_and(flare_image, flare_image, mask=flare_mask)
+
+    return flare_only
+   
+# Function to add lens flare at random position with random intensity and size
+def add_lens_flare(image_path, flare_path):
+    # Read the base image and the flare image
+    image = cv2.imread(image_path)
+
+    flare = filter_flare(flare_path)
+    
+    # resize the flare image to the size of the base image
+    intensity =1
+    flare = cv2.resize(flare, (image.shape[1], image.shape[0]))
+    # calculate the bounding box of the flare
+    
+    
+
+    # Choose random position for the flare
+
+   
+    resized_flare =flare
+    
+    x_pos = random.randint(0, image.shape[1] - resized_flare.shape[1])
+    y_pos = random.randint(0, image.shape[0] - resized_flare.shape[0])
+
+    # Resize flare to a random scale
+    
+
+    # Choose random intensity for the flare
+    
+   
+    resized_flare = (resized_flare).astype(np.uint8)
+    
+
+    # Create an overlay with the same size as the image
+    overlay = np.zeros_like(image, dtype=np.uint8)
+   
+    # Place the resized flare on the overlay
+    overlay[:,:] = resized_flare
+
+    
+
+    
+    # Blend the overlay with the image using the flare alpha channel as mask
+    resized_flare = cv2.cvtColor(resized_flare, cv2.COLOR_BGR2BGRA)
+    # make the the dark regions of the flare transparent
+    # the channel 3 of the flare image is the alpha channel, should be proportional to the brightness of the flare
+    resized_flare[:,:,3] = cv2.cvtColor(resized_flare, cv2.COLOR_BGR2GRAY)
+
+    
+    
+
+    # the transparency of the flare should be ratio between the flare and the image
+    
+
+    alpha_mask = resized_flare[:,:,3] / 255.0
+    alpha_mask = alpha_mask
+    alpha_mask = np.clip(alpha_mask, 0, 1)
+    
+    # the black regions of the flare should be transparent
+    # and 
+
+    # the transparency of the flare should be higher in the dark regions
+    
+
+
+    for c in range(0, 3):
+        image[y_pos:y_pos+resized_flare.shape[0], x_pos:x_pos+resized_flare.shape[1], c] =  (alpha_mask * overlay[:,:, c] +
+                                                                                               (1-alpha_mask) * image[:,:, c])
+
+
+    # Save the result
+    
+    # resize the mask to the target size
+    
+    mask = alpha_mask>0
+    mask = mask.astype(np.uint8)
+    
+    return image,mask
+
+
+
+
+
+
+
 @dataclass
 class DatasetArgsConfig:
     """Arguments for JsonIndexDataset. See here for a full list: pytorch3d/implicitron/dataset/json_index_dataset.py"""
@@ -186,7 +293,8 @@ class DTUConfig:
     debug: Optional[int] = 0
     light_strength: int =  200
     light_gamma: int =  1.2
-    
+    dataset_id: str = "eth3d"
+   
 
 class DTUDataset(Dataset):
     def __init__(self, config: DTUConfig):
@@ -199,7 +307,7 @@ class DTUDataset(Dataset):
         assert self.split in ['train', 'val', 'test'], \
             'split must be either "train", "val" or "test"!'
         
-        
+        self.dataset_id = config.dataset_id
         
         self.light_class = config.target_light
         self.img_wh = (config.batch.image_width, config.batch.image_height)
@@ -218,11 +326,11 @@ class DTUDataset(Dataset):
         self.build_proj_mats()
         self.define_transforms()
         self.output_total = config.output_total
-        prompt_dir = config.prompt_dir
+        prompt_dir = None
         if prompt_dir != None:
             import json
             captions = json.load(open(prompt_dir))
-        self.prompt_dir =captions
+            self.prompt_dir =captions
         
       
         
@@ -230,88 +338,169 @@ class DTUDataset(Dataset):
         
     def build_metas(self):
         self.metas = []
-        if self.debug==1:
-            self.split = "train"
-        with open(f'/{ROOTDIR}/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}.txt') as f:
-            self.scans = [line.rstrip() for line in f.readlines()]
-        output_pkl = f'/{ROOTDIR}/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}_abs.pkl'
         import pickle
-        with open(output_pkl, 'rb') as f:
-            self.output_pkl = pickle.load(f)
-        # light conditions 0-6 for training
-        # light condition 3 for testing (the brightest?)
+        if self.dataset_id == "dtu":
+            if self.debug==1:
+                self.split = "train"
+            with open(f'/{ROOTDIR}/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}.txt') as f:
+                self.scans = [line.rstrip() for line in f.readlines()]
+            output_pkl = f'/{ROOTDIR}/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}_abs.pkl'
         
-        outputs_total = {}
-        for scan in self.output_pkl.keys():
-            scan_index = scan.split('_')[0]
-            if scan_index not in outputs_total:
-                outputs_total[scan_index] = []
-            outputs_total[scan_index].append(self.output_pkl[scan])
-        for scan in outputs_total.keys():
-            outputs_total[scan] = np.mean(np.array(outputs_total[scan]), axis=0)
-            print(f"scan {scan} mean output: {outputs_total[scan]}")
-        self.total_pkl = outputs_total
+            
+            with open(output_pkl, 'rb') as f:
+                self.output_pkl = pickle.load(f)
+            # light conditions 0-6 for training
+            # light condition 3 for testing (the brightest?)
+            
+            outputs_total = {}
+            for scan in self.output_pkl.keys():
+                scan_index = scan.split('_')[0]
+                if scan_index not in outputs_total:
+                    outputs_total[scan_index] = []
+                outputs_total[scan_index].append(self.output_pkl[scan])
+            for scan in outputs_total.keys():
+                outputs_total[scan] = np.mean(np.array(outputs_total[scan]), axis=0)
+                print(f"scan {scan} mean output: {outputs_total[scan]}")
+            self.total_pkl = outputs_total
 
+        
+            light_idxs = list(range(7))
 
-        light_idxs = list(range(7))
+            pair_file = "Cameras/pair.txt"
+            for scan in self.scans:
+                with open(os.path.join(self.root_dir, pair_file)) as f:
+                    num_viewpoint = int(f.readline())
+                    # viewpoints (49)
+                    for _ in range(num_viewpoint):
+                        ref_view = int(f.readline().rstrip())
+                        src_views = [int(x) for x in f.readline().rstrip().split()[1::2]]
+                        
 
-        pair_file = "Cameras/pair.txt"
-        for scan in self.scans:
-            with open(os.path.join(self.root_dir, pair_file)) as f:
-                num_viewpoint = int(f.readline())
-                # viewpoints (49)
-                for _ in range(num_viewpoint):
-                    ref_view = int(f.readline().rstrip())
-                    src_views = [int(x) for x in f.readline().rstrip().split()[1::2]]
-                    
-
-                    for light_idx in light_idxs:
-                        output_key = f"{scan}_{ref_view}_{src_views[0]}_{src_views[1]}"
-                        losses = self.output_pkl[output_key]
-                        if self.split=="train":
-                            if self.debug ==1:
-                                if scan == "scan105":
+                        for light_idx in light_idxs:
+                            output_key = f"{scan}_{ref_view}_{src_views[0]}_{src_views[1]}"
+                            losses = self.output_pkl[output_key]
+                            if self.split=="train":
+                                if self.debug ==1:
+                                    if scan == "scan105":
+                                        self.metas += [(scan, ref_view,light_idx, src_views,int(np.argmin(losses)))]
+                                else:                               
                                     self.metas += [(scan, ref_view,light_idx, src_views,int(np.argmin(losses)))]
-                            else:                               
-                                self.metas += [(scan, ref_view,light_idx, src_views,int(np.argmin(losses)))]
-                        elif self.split!="train":
-                            if light_idx!=0 or scan !="scan106":
-                                continue
-                            else:
-                                self.metas += [(scan, ref_view,light_idx, src_views,int(np.argmin(losses)))]
+                            elif self.split!="train":
+                                if light_idx!=0 or scan !="scan106":
+                                    continue
+                                else:
+                                    self.metas += [(scan, ref_view,light_idx, src_views,int(np.argmin(losses)))]
                                
         
-                           
+        elif self.dataset_id == "eth3d":
+            split_path = os.path.join(self.root_dir, f'{self.split}.txt')
+            bbox_path = os.path.join(self.root_dir, 'bbox.pkl')
+
+            self.metas = []
+            import pickle as pkl
+            with open(split_path) as f:
+                self.scans = [line.rstrip() for line in f.readlines()]
+            with open(bbox_path, 'rb') as f:
+                self.total_pkl = pickle.load(f)
+                
+            for scan in self.scans:
+                pair_file = "pair.txt"
+                print(scan,self.root_dir, pair_file)
+                pair_file = os.path.join(self.root_dir, scan, pair_file)
+                with open(pair_file,"r") as f:
+                    num_viewpoint = int(f.readline())
+                    print(f"num_viewpoint: {num_viewpoint}")
+                    for _ in range(num_viewpoint):
+                        ref_view = int(f.readline().rstrip())
+                        src_views = [int(x) for x in f.readline().rstrip().split()[1::2]]
+                        
+                        self.metas += [(scan, ref_view,None, src_views,None)]
+    
+
+
+            
+
+            
                          
     def build_proj_mats(self):
         proj_mats = []
-        for vid in range(49): # total 49 view ids
-            if self.img_wh is None:
-                proj_mat_filename = os.path.join(self.root_dir,
-                                                 f'Cameras/train/{vid:08d}_cam.txt')
-            else:
-                proj_mat_filename = os.path.join(self.root_dir,
-                                                 f'Cameras/{vid:08d}_cam.txt')
-            intrinsics, extrinsics, depth_min = \
-                self.read_cam_file(proj_mat_filename)
-            if self.img_wh is not None: # resize the intrinsics to the coarsest level
-                intrinsics[0] *= self.img_wh[0]/1600/4
-                intrinsics[1] *= self.img_wh[1]/1200/4
-            K = intrinsics
-            R = extrinsics
-            # multiply intrinsics and extrinsics to get projection matrix
-            proj_mat_ls = []
-            for l in reversed(range(self.levels)):
-                proj_mat_l = np.eye(4)
-                proj_mat_l[:3, :4] = intrinsics @ extrinsics[:3, :4]
-                intrinsics[:2] *= 2 # 1/4->1/2->1
-                proj_mat_ls += [torch.FloatTensor(proj_mat_l)]
-            # (self.levels, 4, 4) from fine to coarse
-            proj_mat_ls = torch.stack(proj_mat_ls[::-1])
-           
-            proj_mats += [(proj_mat_ls, depth_min,K,R)]
+        if self.dataset_id == "dtu":
+            for vid in range(49): # total 49 view ids
+                if self.img_wh is None:
+                    proj_mat_filename = os.path.join(self.root_dir,
+                                                    f'Cameras/train/{vid:08d}_cam.txt')
+                else:
+                    proj_mat_filename = os.path.join(self.root_dir,
+                                                    f'Cameras/{vid:08d}_cam.txt')
+                intrinsics, extrinsics, depth_min = \
+                    self.read_cam_file(proj_mat_filename)
+                if self.img_wh is not None: # resize the intrinsics to the coarsest level
+                    intrinsics[0] *= self.img_wh[0]/1600/4
+                    intrinsics[1] *= self.img_wh[1]/1200/4
+                K = intrinsics
+                R = extrinsics
+                # multiply intrinsics and extrinsics to get projection matrix
+                proj_mat_ls = []
+                for l in reversed(range(self.levels)):
+                    proj_mat_l = np.eye(4)
+                    proj_mat_l[:3, :4] = intrinsics @ extrinsics[:3, :4]
+                    intrinsics[:2] *= 2 # 1/4->1/2->1
+                    proj_mat_ls += [torch.FloatTensor(proj_mat_l)]
+                # (self.levels, 4, 4) from fine to coarse
+                proj_mat_ls = torch.stack(proj_mat_ls[::-1])
+            
+                proj_mats += [(proj_mat_ls, depth_min,K,R)]
 
-        self.proj_mats = proj_mats
+            self.proj_mats = proj_mats
+        elif self.dataset_id == "eth3d":
+            proj_mats = []
+
+            img_scan_whs = {}
+        
+            for scan in self.scans:
+                target_filename = os.path.join(self.root_dir,
+                                    f'{scan}/images/{0:08d}.jpg')
+                target_img = Image.open(target_filename)
+                img_scan_whs[scan] = target_img.size[::-1]
+            self.img_scan_whs = img_scan_whs    
+            
+       
+            for meta in self.metas:
+                scan, ref_view, _, src_views, _ = meta
+                print("img_scan_whs; ",img_scan_whs)
+                camera_file = os.path.join(self.root_dir, scan, f'cams_1/{ref_view:08d}_cam.txt')
+                intrinsics, extrinsics, depth_min,depth_max = self.read_cam_file(camera_file)
+                
+
+
+                if self.img_wh is not None: # resize the intrinsics to the coarsest level
+                    width = img_scan_whs[scan][1]
+                    height = img_scan_whs[scan][0]
+                    print(width,height)
+                    intrinsics[0] *= self.img_wh[0]/width/4
+                    intrinsics[1] *= self.img_wh[1]/height/4
+
+                    # intrinsics[0] *= self.img_wh[0]/6223
+                    # intrinsics[1] *= self.img_wh[1]/4146
+
+
+                K = intrinsics
+                R = extrinsics
+                proj_mat_ls = []
+                for l in reversed(range(self.levels)):
+                    proj_mat_l = np.eye(4)
+                    proj_mat_l[:3, :4] = intrinsics @ extrinsics[:3, :4]
+                    intrinsics[:2] *= 2 # 1/4->1/2->1
+                    proj_mat_ls += [torch.FloatTensor(proj_mat_l)]
+                # (self.levels, 4, 4) from fine to coarse
+                proj_mat_ls = torch.stack(proj_mat_ls[::-1])
+            
+                proj_mats += [(proj_mat_ls, depth_min,K,R)]
+
+                self.proj_mats = proj_mats
+
+        
+    
 
     def read_cam_file(self, filename):
         with open(filename) as f:
@@ -324,7 +513,7 @@ class DTUDataset(Dataset):
         intrinsics = intrinsics.reshape((3, 3))
         # depth_min & depth_interval: line 11
         depth_min = float(lines[11].split()[0])
-        return intrinsics, extrinsics, depth_min
+        return intrinsics, extrinsics, depth_min,float(lines[11].split()[1])
 
     def read_depth(self, filename):
         depth = np.array(read_pfm(filename)[0], dtype=np.float32) # (1200, 1600)
@@ -412,158 +601,339 @@ class DTUDataset(Dataset):
 
 
     def  __getitem__(self, idx):
-       
-        scan, ref_view,light_idx, src_views,target_light = self.metas[idx]
-        # use only the reference view and first nviews-1 source views
-        # shuffle the source views
+        if self.dataset_id == "eth3d":
+            scan, ref_view,light_idx, src_views,target_light = self.metas[idx]
+            task = np.random.choice([#"different albedo",
+                                     #"different dark",
+                                     "flare"
+                                    #"overexposed","shadow"
+                                     ],1)
+            
+            view_ids = [ref_view] + src_views[:self.n_views-1]
+            sample = {}
+            imgs = []
+            cams = []
+            proj_mats = []
+            target_imgs = []
+            Ks = []
+            Rs = []
+            intensity_stats =[]
+            index = np.random.permutation(np.array([0,1,1]))
 
-        view_ids = [ref_view] + src_views[:self.n_views-1]
-        light_input = np.random.choice(7,1)
-        light_bright_sign = light_input[0] - light_idx
-        input_lights=np.random.choice(7,3)
-       
-        target_light = target_light
+            x_min = self.bbox[f"{scan}"]["x_min"]
+            x_max = self.bbox[f"{scan}"]["x_max"]
+            y_min = self.bbox[f"{scan}"]["y_min"]
+            y_max = self.bbox[f"{scan}"]["y_max"]
+            z_min = self.bbox[f"{scan}"]["z_min"]
+            z_max = self.bbox[f"{scan}"]["z_max"]
 
-
-
-        # output_key = f"{scan}_{ref_view}_{src_views[0]}_{src_views[1]}"
-        # if self.total_pkl:
-        #     target_light = self.total_pkl[scan]
-        #     target_light = np.argmin(target_light)
-        # else:
-        #     target_light = self.output_pkl[output_key]
-        #     target_light = np.argmin(target_light)
-
-        
-
-        sample = {}
-        imgs = []
-        cams = []
-        proj_mats = []
-        target_imgs = []
-        Ks = []
-        Rs = []
-        intensity_stats =[]
-        prompt = str(np.random.choice(self.prompt_dir[scan][str(ref_view)],1)[0])
-
-        x_min = self.bbox[f"{scan}_train"]["x"]["min"]
-        x_max = self.bbox[f"{scan}_train"]["x"]["max"]
-        y_min = self.bbox[f"{scan}_train"]["y"]["min"]
-        y_max = self.bbox[f"{scan}_train"]["y"]["max"]
-        z_min = self.bbox[f"{scan}_train"]["z"]["min"]
-        z_max = self.bbox[f"{scan}_train"]["z"]["max"]
-
-        sample['prompt'] = [f"modify the lightness of image to light_class_{light_idx} style"]
-        for i, vid in enumerate(view_ids):
-        # NOTE that the id in image file names is from 1 to 49 (not 0~48)
-           
-            img_filename = os.path.join(self.root_dir,
-                            f'Rectified/{scan}_train/rect_{vid+1:03d}_{input_lights[i]}_r5000.png')
-            target_filename = os.path.join(self.root_dir,
-                            f'Rectified/{scan}_train/rect_{vid+1:03d}_{target_light}_r5000.png')
-            mask_filename = os.path.join(self.root_dir,
-                            f'Depths/{scan}/depth_visual_{vid:04d}.png')
-            depth_filename = os.path.join(self.root_dir,
-                            f'Depths/{scan}/depth_map_{vid:04d}.pfm')
-    
-
-            img = Image.open(img_filename)
-            target_img = Image.open(target_filename)
-            if self.img_wh is not None:
-                img = img.resize(self.img_wh, Image.BILINEAR)
-                target_img = target_img.resize(self.img_wh, Image.BILINEAR)
-            if input_lights[i] != target_light:
-                # make image brighter or darker
-                img = np.array(img)
-                if input_lights[i] > target_light:
-                    # increase contrast and the image looks 
-                    alpha = np.random.uniform(1.5, 2.5)
-                    beta = np.random.uniform(10, 30)
-                    img = cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
+            sample['prompt'] = [f"modify the images for task {task}"]
+            sample["small_mask"]=[]
+            for i, vid in enumerate(view_ids):
+            # NOTE that the id in image file names is from 1 to 49 (not 0~48)
+                if index[i]:
+                    img_filename = os.path.join(self.root_dir,
+                                    f'{scan}/images/{vid:08d}.jpg')
                 else:
-                    alpha = np.random.uniform(0.15, 0.75)
-                    beta = np.random.uniform(-30, -10)
-                    img = cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
+                    if task == "different albedo":
+                        img_filename = os.path.join(self.root_dir,
+                                    f'{scan}/images_albedo/different_albedo_{vid:08d}.jpg')
+                    elif task == "flare":
+                        
+                        img_filename = os.path.join(self.root_dir,
+                                    f'{scan}/images/{vid:08d}.jpg')
+                        output_path = os.path.join(self.root_dir,
+                                    f'{scan}/images_dark/different_albedo_{vid:08d}.jpg')
+                        flare_file_path = "/root/autodl-tmp/lens_flare"
+                        files = os.listdir(flare_file_path)
+                        flare_file = random.choice(files)
+                        flare_file_path = os.path.join(flare_file_path,flare_file)
+
+
+                    elif task == "overexposed":
+                        img_filename = os.path.join(self.root_dir,
+                                    f'{scan}/images/{vid:08d}.jpg')
+                        # img_filename = os.path.join(self.root_dir,
+                        #             f'{scan}/images_shadow/different_shadow_{vid:08d}.jpg')
+                    else:
+                        img_filename = os.path.join(self.root_dir,
+                                    f'{scan}/images/{vid:08d}.jpg')
+                        # img_filename = os.path.join(self.root_dir,
+                        #             f'{scan}/images_shadow/different_dark_{vid:08d}.jpg')
+
+
+                target_filename = os.path.join(self.root_dir,
+                                    f'{scan}/images/{vid:08d}.jpg')
+                # mask_filename = os.path.join(self.root_dir,
+                #                 f'Depths/{scan}/depth_visual_{vid:04d}.png')
+                # depth_filename = os.path.join(self.root_dir,
+                #                 f'Depths/{scan}/depth_map_{vid:04d}.pfm')
+                sample["small_mask"].append(torch.zeros(self.img_wh[0]//8,self.img_wh[1]//8))
+                if task == "flare" and not index[i]:
+                    img,small_mask = add_lens_flare(img_filename,flare_file_path)
                     
-                  
+                    # resize the mask to the target size
+                    
+                    small_mask = cv2.resize(small_mask, (self.img_wh[0]//8,self.img_wh[1]//8), interpolation=cv2.INTER_NEAREST)
+                    
 
-            img = self.transform(img)
-            target_img = self.transform(target_img)
-            imgs += [img]
-            target_imgs += [target_img]
+                    #small_mask = cv2.resize(small_mask, (self.img_wh[0]//8,self.img_wh[1]//8), interpolation=cv2.INTER_NEAREST)
+                    
+                    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                    img = Image.fromarray(img)
+                    sample["small_mask"][-1] = torch.tensor(small_mask).float()
 
-            proj_mat_ls, depth_min,K,R = self.proj_mats[vid]
-            Ks += [K]
-            Rs += [R]
-        
+                    
+                    
 
+                else:
+                    img = Image.open(img_filename)
+                target_img = Image.open(target_filename)
 
-
-            if i == 0:  # reference view
-                sample["small_mask"]=[]
                 
-                sample['init_depth_min'] = torch.FloatTensor([depth_min])
-                
-                sample['masks'] = self.read_mask(mask_filename)
-                for key in sample['masks']:
-                    sample['masks'][key] = sample['masks'][key]
-                sample['depths'] = self.read_depth(depth_filename)
-                for key in sample['depths']:
-                    sample['depths'][key] = sample['depths'][key]
-                sample["depth"] = sample["depths"]["level_0"]
-                ref_proj_inv = torch.inverse(proj_mat_ls)
-            else:
-                # small_mask = self.read_mask(mask_filename)["level_0"]
-                # small_wh = (self.img_wh[0]/8,self.img_wh[1]/8)
-                # sample["small_mask"] = interpolate(small_mask[None,None].float(), small_wh, mode='nearest')[0,0].byte()
-                
-                proj_mats += [proj_mat_ls @ ref_proj_inv]
-            var, mean = torch.var_mean(img)
-            intensity_stat = torch.stack([mean, var], dim=0)
-            intensity_stats.append(intensity_stat)
-    
-    
-        imgs = torch.stack(imgs) # (V, 3, H, W)
+                if self.img_wh is not None:
+                    
+                    img = img.resize(self.img_wh, Image.BILINEAR)
+                    target_img = target_img.resize(self.img_wh, Image.BILINEAR)
+               
+                # if not index[i]:
+                #     if task =="overexposed":
+                #         # increase contrast and the image looks
+                #         img = np.array(img)
+                #         alpha = np.random.uniform(1.5, 2)
+                #         beta = np.random.uniform(10, 15)
+                #         img = cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
+                #     elif task =="shadow":
+                #         img = np.array(img)
+                #         alpha = np.random.uniform(0.5, 0.75)
+                #         beta = np.random.uniform(-15, -10)
+                #         img = cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
+                img = self.transform(img)
+                target_img = self.transform(target_img)
+                imgs += [img]
+                target_imgs += [target_img]
+
+                proj_mat_ls, depth_min,K,R = self.proj_mats[idx]
+                Ks += [K]
+                Rs += [R]
+            
+
+
+
+                if i == 0:  # reference view
+                    
+                    
+                    sample['init_depth_min'] = torch.FloatTensor([depth_min])
+                    
+                    
+                    ref_proj_inv = torch.inverse(proj_mat_ls)
+                else:
+                    # small_mask = self.read_mask(mask_filename)["level_0"]
+                    # small_wh = (self.img_wh[0]/8,self.img_wh[1]/8)
+                    # sample["small_mask"] = interpolate(small_mask[None,None].float(), small_wh, mode='nearest')[0,0].byte()
+                    
+                    proj_mats += [proj_mat_ls @ ref_proj_inv]
+                var, mean = torch.var_mean(img)
+                intensity_stat = torch.stack([mean, var], dim=0)
+                intensity_stats.append(intensity_stat)
         
-        target_imgs = torch.stack(target_imgs)
-        proj_mats = torch.stack(proj_mats)[:,:,:3] # (V-1, self.levels, 3, 4) from fine to coarse
+            sample["small_mask"] = torch.stack(sample["small_mask"])
+            sample["small_mask"] = sample["small_mask"].unsqueeze(1)
+            sample["small_mask"] = sample["small_mask"].bool()
+            imgs = torch.stack(imgs) # (V, 3, H, W)
+            
+            target_imgs = torch.stack(target_imgs)
+            proj_mats = torch.stack(proj_mats)[:,:,:3] # (V-1, self.levels, 3, 4) from fine to coarse
+            
+            imgs = self.unpreprocess(imgs)
+            target_imgs = self.unpreprocess(target_imgs)
+
+            
+            
+            
+            
+
+
+
         
-        imgs = self.unpreprocess(imgs)
-        target_imgs = self.unpreprocess(target_imgs)
+            Ks = np.stack(Ks)
+            Rs = np.stack(Rs)
+            sample['pose'] = Rs
+            sample['K'] = Ks
+            sample['images'] = imgs
+            
+            
+
+            sample["intensity_stats"] = torch.stack(intensity_stats)
+            sample['proj_mats'] = proj_mats
+            sample['depth_interval'] = torch.FloatTensor([self.depth_interval])
+            sample['scan_vid'] = (scan, ref_view)
+            
+
+            sample['target_imgs'] = target_imgs
+
+            sample["bbox"] =torch.tensor([[x_min,y_min,z_min], 
+                                        [x_max,y_max,z_max]], dtype=torch.float32)
+
+
+
+
+            return sample
+
+
+
+
+        else:
+            scan, ref_view,light_idx, src_views,target_light = self.metas[idx]
+            # use only the reference view and first nviews-1 source views
+            # shuffle the source views
+
+            view_ids = [ref_view] + src_views[:self.n_views-1]
+            light_input = np.random.choice(7,3)
+            
+            input_lights=light_input
+            target_light = target_light
+
+
+
+            # output_key = f"{scan}_{ref_view}_{src_views[0]}_{src_views[1]}"
+            # if self.total_pkl:
+            #     target_light = self.total_pkl[scan]
+            #     target_light = np.argmin(target_light)
+            # else:
+            #     target_light = self.output_pkl[output_key]
+            #     target_light = np.argmin(target_light)
+
+            
+
+            sample = {}
+            imgs = []
+            cams = []
+            proj_mats = []
+            target_imgs = []
+            Ks = []
+            Rs = []
+            intensity_stats =[]
+           
+
+            x_min = self.bbox[f"{scan}_train"]["x"]["min"]
+            x_max = self.bbox[f"{scan}_train"]["x"]["max"]
+            y_min = self.bbox[f"{scan}_train"]["y"]["min"]
+            y_max = self.bbox[f"{scan}_train"]["y"]["max"]
+            z_min = self.bbox[f"{scan}_train"]["z"]["min"]
+            z_max = self.bbox[f"{scan}_train"]["z"]["max"]
+
+            sample['prompt'] = [f"modify the lightness of image to light_class_{light_idx} style"]
+            for i, vid in enumerate(view_ids):
+            # NOTE that the id in image file names is from 1 to 49 (not 0~48)
+            
+                img_filename = os.path.join(self.root_dir,
+                                f'Rectified/{scan}_train/rect_{vid+1:03d}_{input_lights[i]}_r5000.png')
+                target_filename = os.path.join(self.root_dir,
+                                f'Rectified/{scan}_train/rect_{vid+1:03d}_{target_light}_r5000.png')
+                mask_filename = os.path.join(self.root_dir,
+                                f'Depths/{scan}/depth_visual_{vid:04d}.png')
+                depth_filename = os.path.join(self.root_dir,
+                                f'Depths/{scan}/depth_map_{vid:04d}.pfm')
+        
+
+                img = Image.open(img_filename)
+                target_img = Image.open(target_filename)
+                if self.img_wh is not None:
+                    img = img.resize(self.img_wh, Image.BILINEAR)
+                    target_img = target_img.resize(self.img_wh, Image.BILINEAR)
+                # if input_lights[i] != target_light:
+                #     # make image brighter or darker
+                #     img = np.array(img)
+                #     if input_lights[i] > target_light:
+                #         # increase contrast and the image looks 
+                #         alpha = np.random.uniform(1.5, 2)
+                #         beta = np.random.uniform(10, 15)
+                #         img = cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
+                #     else:
+                #         alpha = np.random.uniform(0.5, 0.75)
+                #         beta = np.random.uniform(-15, -10)
+                #         img = cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
+                        
+                    
+
+                img = self.transform(img)
+                target_img = self.transform(target_img)
+                imgs += [img]
+                target_imgs += [target_img]
+
+                proj_mat_ls, depth_min,K,R = self.proj_mats[vid]
+                Ks += [K]
+                Rs += [R]
+            
+
+
+
+                if i == 0:  # reference view
+                    sample["small_mask"]=[]
+                    
+                    sample['init_depth_min'] = torch.FloatTensor([depth_min])
+                    
+                    sample['masks'] = self.read_mask(mask_filename)
+                    for key in sample['masks']:
+                        sample['masks'][key] = sample['masks'][key]
+                    sample['depths'] = self.read_depth(depth_filename)
+                    for key in sample['depths']:
+                        sample['depths'][key] = sample['depths'][key]
+                    sample["depth"] = sample["depths"]["level_0"]
+                    ref_proj_inv = torch.inverse(proj_mat_ls)
+                else:
+                    # small_mask = self.read_mask(mask_filename)["level_0"]
+                    # small_wh = (self.img_wh[0]/8,self.img_wh[1]/8)
+                    # sample["small_mask"] = interpolate(small_mask[None,None].float(), small_wh, mode='nearest')[0,0].byte()
+                    
+                    proj_mats += [proj_mat_ls @ ref_proj_inv]
+                var, mean = torch.var_mean(img)
+                intensity_stat = torch.stack([mean, var], dim=0)
+                intensity_stats.append(intensity_stat)
         
         
-        img_mask = (imgs-target_imgs).abs().mean(1,keepdim=True).repeat(1,3,1,1)
+            imgs = torch.stack(imgs) # (V, 3, H, W)
+            
+            target_imgs = torch.stack(target_imgs)
+            proj_mats = torch.stack(proj_mats)[:,:,:3] # (V-1, self.levels, 3, 4) from fine to coarse
+            
+            imgs = self.unpreprocess(imgs)
+            target_imgs = self.unpreprocess(target_imgs)
+            
+            
+            img_mask = (imgs-target_imgs).abs().mean(1,keepdim=True).repeat(1,3,1,1)
 
 
 
-       
-        Ks = np.stack(Ks)
-        Rs = np.stack(Rs)
-        sample['pose'] = Rs
-        sample['K'] = Ks
-        sample['images'] = imgs
         
-        
+            Ks = np.stack(Ks)
+            Rs = np.stack(Rs)
+            sample['pose'] = Rs
+            sample['K'] = Ks
+            sample['images'] = imgs
+            
+            
 
-        sample["intensity_stats"] = torch.stack(intensity_stats)
-        sample['proj_mats'] = proj_mats
-        sample['depth_interval'] = torch.FloatTensor([self.depth_interval])
-        sample['scan_vid'] = (scan, ref_view)
-        
+            sample["intensity_stats"] = torch.stack(intensity_stats)
+            sample['proj_mats'] = proj_mats
+            sample['depth_interval'] = torch.FloatTensor([self.depth_interval])
+            sample['scan_vid'] = (scan, ref_view)
+            
 
-        sample['target_imgs'] = target_imgs
-        small_mask = sample["masks"]["level_0"]
-        small_wh = (80,64)
-        sample["class"] = torch.tensor([light_idx])
-        sample["small_mask"] = interpolate(small_mask[None,None].float(), small_wh, mode='nearest')[0,0].byte()
+            sample['target_imgs'] = target_imgs
+            small_mask = sample["masks"]["level_0"]
+            small_wh = (80,64)
+            sample["class"] = torch.tensor([light_idx])
+            sample["small_mask"] = sample["masks"]["level_3"]
 
-        sample["bbox"] =torch.tensor([[x_min,y_min,z_min], 
-                                      [x_max,y_max,z_max]], dtype=torch.float32)
-
-
+            sample["bbox"] =torch.tensor([[x_min,y_min,z_min], 
+                                        [x_max,y_max,z_max]], dtype=torch.float32)
 
 
-        return sample
+
+
+            return sample
 
 
 
