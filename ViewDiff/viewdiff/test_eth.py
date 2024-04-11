@@ -364,7 +364,7 @@ class DTUDataset(Dataset):
                                   #"shadow","different dark"
                                  ],1)
         if ref_view == 26 or ref_view == 14 or ref_view == 15 :
-            view_ids = [ref_view] +[27]+ src_views[:self.n_views-2]
+            view_ids = [ref_view] +[27,16]#+ src_views[:self.n_views-2]
         else:
             view_ids = [ref_view] + src_views[:self.n_views-1]
         sample = {}

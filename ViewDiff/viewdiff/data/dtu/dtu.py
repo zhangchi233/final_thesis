@@ -390,7 +390,7 @@ class DTUDataset(Dataset):
                                     continue
                                 else:
                                     self.metas += [(scan, ref_view,light_idx, src_views,int(np.argmin(losses)))]
-                               
+                           
         
         elif self.dataset_id == "eth3d":
             split_path = os.path.join(self.root_dir, f'{self.split}.txt')
@@ -415,7 +415,52 @@ class DTUDataset(Dataset):
                         src_views = [int(x) for x in f.readline().rstrip().split()[1::2]]
                         
                         self.metas += [(scan, ref_view,None, src_views,None)]
-    
+        elif self.dataset_id=="tanks":
+            self.metas = []
+            if self.split == 'intermediate':
+                self.scans = ['Family', 'Francis', 'Horse', 'Lighthouse',
+                                'M60', 'Panther', 'Playground', 'Train']
+                self.image_sizes = {'Family': (1920, 1080),
+                                    'Francis': (1920, 1080),
+                                    'Horse': (1920, 1080),
+                                    'Lighthouse': (2048, 1080),
+                                    'M60': (2048, 1080),
+                                    'Panther': (2048, 1080),
+                                    'Playground': (1920, 1080),
+                                    'Train': (1920, 1080)}
+                self.depth_interval = {'Family': 2.5e-3,
+                                        'Francis': 1e-2,
+                                        'Horse': 1.5e-3,
+                                        'Lighthouse': 1.5e-2,
+                                        'M60': 5e-3,
+                                        'Panther': 5e-3,
+                                        'Playground': 7e-3,
+                                        'Train': 5e-3} # depth interval for each scan (hand tuned)
+            elif self.split == 'advanced':
+                self.scans = ['Auditorium', 'Ballroom', 'Courtroom',
+                                'Museum', 'Palace', 'Temple']
+                self.image_sizes = {'Auditorium': (1920, 1080),
+                                    'Ballroom': (1920, 1080),
+                                    'Courtroom': (1920, 1080),
+                                    'Museum': (1920, 1080),
+                                    'Palace': (1920, 1080),
+                                    'Temple': (1920, 1080)}
+                self.depth_interval = {'Auditorium': 3e-2,
+                                        'Ballroom': 2e-2,
+                                        'Courtroom': 2e-2,
+                                        'Museum': 2e-2,
+                                        'Palace': 1e-2,
+                                        'Temple': 1e-2} # depth interval for each scan (hand tuned)
+            self.ref_views_per_scan = defaultdict(list)
+
+            for scan in self.scans:
+                with open(os.path.join(self.root_dir, self.split, scan, 'pair.txt')) as f:
+                    num_viewpoint = int(f.readline())
+                    for _ in range(num_viewpoint):
+                        ref_view = int(f.readline().rstrip())
+                        src_views = [int(x) for x in f.readline().rstrip().split()[1::2]]
+                        self.metas += [(scan, -1, ref_view, src_views)]
+                        self.ref_views_per_scan[scan] += [ref_view]
 
 
             
@@ -499,7 +544,31 @@ class DTUDataset(Dataset):
 
                 self.proj_mats = proj_mats
 
-        
+        elif self.dataset_id == "tanks":
+            self.proj_mats = {} # proj mats for each scan
+            for scan in self.scans:
+                self.proj_mats[scan] = {}
+                img_w, img_h = self.image_sizes[scan]
+                for vid in self.ref_views_per_scan[scan]:
+                    proj_mat_filename = os.path.join(self.root_dir, self.split, scan,
+                                                    f'cams/{vid:08d}_cam.txt')
+                    intrinsics, extrinsics, depth_min = \
+                        self.read_cam_file(proj_mat_filename)
+                    intrinsics[0] *= self.img_wh[0]/img_w/4
+                    intrinsics[1] *= self.img_wh[1]/img_h/4
+                    # self.depth_interval[scan][vid] = depth_interval
+
+                    # multiply intrinsics and extrinsics to get projection matrix
+                    proj_mat_ls = []
+                    for l in reversed(range(self.levels)):
+                        proj_mat_l = np.eye(4)
+                        proj_mat_l[:3, :4] = intrinsics @ extrinsics[:3, :4]
+                        intrinsics[:2] *= 2 # 1/4->1/2->1
+                        proj_mat_ls += [torch.FloatTensor(proj_mat_l)]
+                    # (self.levels, 4, 4) from fine to coarse
+                    proj_mat_ls = torch.stack(proj_mat_ls[::-1])
+                    self.proj_mats[scan][vid] = (proj_mat_ls, depth_min,intrinsics,extrinsics)
+
     
 
     def read_cam_file(self, filename):
@@ -780,7 +849,143 @@ class DTUDataset(Dataset):
 
             return sample
 
+        if self.dataset_id == "tanks":
+            sample = {}
+            scan, _, ref_view, src_views = self.metas[idx]
+            task = np.random.choice([#"different albedo",
+                                     #"different dark",
+                                     "flare"
+                                    #"overexposed","shadow"
+                                     ],1)
+            
+            view_ids = [ref_view] + src_views[:self.n_views-1]
+            sample = {}
+            imgs = []
+            cams = []
+            proj_mats = []
+            target_imgs = []
+            Ks = []
+            Rs = []
+            intensity_stats =[]
+            index = np.random.permutation(np.array([0,1,1]))
 
+            x_min = self.bbox[f"{scan}"]["x_min"]
+            x_max = self.bbox[f"{scan}"]["x_max"]
+            y_min = self.bbox[f"{scan}"]["y_min"]
+            y_max = self.bbox[f"{scan}"]["y_max"]
+            z_min = self.bbox[f"{scan}"]["z_min"]
+            z_max = self.bbox[f"{scan}"]["z_max"]
+
+            sample['prompt'] = [f"modify the images for task {task}"]
+            sample["small_mask"]=[]
+            
+           
+          
+           
+
+           
+           
+            for i, vid in enumerate(view_ids):
+                img_filename = os.path.join(self.root_dir, self.split, scan, f'images/{vid:08d}.jpg')
+                sample["small_mask"].append(torch.zeros(self.img_wh[0]//8,self.img_wh[1]//8))
+                if task == "flare" and not index[i]:
+                    img,small_mask = add_lens_flare(img_filename,flare_file_path)
+                    
+                    # resize the mask to the target size
+                    
+                    small_mask = cv2.resize(small_mask, (self.img_wh[0]//8,self.img_wh[1]//8), interpolation=cv2.INTER_NEAREST)
+                    
+
+                    #small_mask = cv2.resize(small_mask, (self.img_wh[0]//8,self.img_wh[1]//8), interpolation=cv2.INTER_NEAREST)
+                    
+                    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                    img = Image.fromarray(img)
+                    sample["small_mask"][-1] = torch.tensor(small_mask).float()
+                    
+                    
+
+                else:
+                    img = Image.open(img_filename)
+                target_img = Image.open(img_filename)
+
+                
+                if self.img_wh is not None:
+                    
+                    img = img.resize(self.img_wh, Image.BILINEAR)
+                    target_img = target_img.resize(self.img_wh, Image.BILINEAR)
+                
+                
+                img = self.transform(img)
+                target_img = self.transform(target_img)
+                imgs += [img]
+                target_imgs += [target_img]
+
+                proj_mat_ls, depth_min,K,R = self.proj_mats[scan][vid]
+                Ks += [K]
+                Rs += [R]
+            
+
+
+
+                if i == 0:  # reference view
+                    
+                    
+                    sample['init_depth_min'] = torch.FloatTensor([depth_min])
+                    
+                    
+                    ref_proj_inv = torch.inverse(proj_mat_ls)
+                else:
+                    # small_mask = self.read_mask(mask_filename)["level_0"]
+                    # small_wh = (self.img_wh[0]/8,self.img_wh[1]/8)
+                    # sample["small_mask"] = interpolate(small_mask[None,None].float(), small_wh, mode='nearest')[0,0].byte()
+                    
+                    proj_mats += [proj_mat_ls @ ref_proj_inv]
+                var, mean = torch.var_mean(img)
+                intensity_stat = torch.stack([mean, var], dim=0)
+                intensity_stats.append(intensity_stat)
+        
+            sample["small_mask"] = torch.stack(sample["small_mask"])
+            sample["small_mask"] = sample["small_mask"].unsqueeze(1)
+            sample["small_mask"] = sample["small_mask"].bool()
+            imgs = torch.stack(imgs) # (V, 3, H, W)
+            
+            target_imgs = torch.stack(target_imgs)
+            proj_mats = torch.stack(proj_mats)[:,:,:3] # (V-1, self.levels, 3, 4) from fine to coarse
+            
+            imgs = self.unpreprocess(imgs)
+            target_imgs = self.unpreprocess(target_imgs)
+
+            
+            
+            
+            
+
+
+
+        
+            Ks = np.stack(Ks)
+            Rs = np.stack(Rs)
+            sample['pose'] = Rs
+            sample['K'] = Ks
+            sample['images'] = imgs
+            
+            
+
+            sample["intensity_stats"] = torch.stack(intensity_stats)
+            sample['proj_mats'] = proj_mats
+            sample['depth_interval'] = torch.FloatTensor([self.depth_interval])
+            sample['scan_vid'] = (scan, ref_view)
+            
+
+            sample['target_imgs'] = target_imgs
+
+            sample["bbox"] =torch.tensor([[x_min,y_min,z_min], 
+                                        [x_max,y_max,z_max]], dtype=torch.float32)
+
+
+
+
+            return sample
 
 
         else:
