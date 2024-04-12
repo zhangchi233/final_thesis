@@ -5,7 +5,7 @@
 python -m accelerate.commands.launch \
   /openbayes/home/ViewDiff/viewdiff/train_pix2pix.py \
   --finetune-config.io.pretrained_model_name_or_path timbrooks/instruct-pix2pix \
-  --finetune-config.io.output_dir /openbayes/home/ViewDiff/output_var_unproj \
+  --finetune-config.io.output_dir /root/autodl-tmp/output_var_unproj_dtu2  \
   --finetune-config.io.experiment_name class6 \
   --finetune-config.training.mixed_precision bf16 \
   --finetune-config.training.dataloader_num_workers 8 \
@@ -44,9 +44,9 @@ python -m accelerate.commands.launch \
   --finetune-config.model.pose_cond_coord_space absolute \
   --finetune-config.model.pose_cond_lora_rank 64 \
   --finetune-config.model.n_input_images 3 \
-  --dataset-config.root-dir /root/autodl-tmp/tankandtemples \
+  --dataset-config.root-dir /root/autodl-tmp/mvs_training \
   --dataset-config.threshold 0.8 \
-  --dataset-config.split train \
+  --dataset-config.split advanced \
   --dataset-config.img_wh 512\
   --dataset-config.debug 0\
   --dataset-config.dataset_id dtu \

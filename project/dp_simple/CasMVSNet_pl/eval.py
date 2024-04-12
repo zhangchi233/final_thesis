@@ -21,12 +21,12 @@ torch.backends.cudnn.benchmark = True # this increases inference speed a little
 def get_opts():
     parser = ArgumentParser()
     parser.add_argument('--root_dir', type=str,
-                        default='/home/ubuntu/data/DTU/mvs_training/dtu/',
+                        default='/root/autodl-tmp/tankandtemples',
                         help='root directory of dtu dataset')
-    parser.add_argument('--dataset_name', type=str, default='dtu',
+    parser.add_argument('--dataset_name', type=str, default='tanks',
                         choices=['dtu', 'tanks', 'blendedmvs'],
                         help='which dataset to train/val')
-    parser.add_argument('--split', type=str, default='test',
+    parser.add_argument('--split', type=str, default='intermediate',
                         help='which split to evaluate')
     parser.add_argument('--scan', type=str, default='',
                         help='specify scan to evaluate (must be in the split)')
@@ -48,7 +48,7 @@ def get_opts():
                         help='number of groups in groupwise correlation, must be a divisor of 8')
     parser.add_argument('--img_wh', nargs="+", type=int, default=[1152, 864],
                         help='resolution (img_w, img_h) of the image, must be multiples of 32')
-    parser.add_argument('--ckpt_path', type=str, default='ckpts/exp2/_ckpt_epoch_10.ckpt',
+    parser.add_argument('--ckpt_path', type=str, default='/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/ckpts/_ckpt_epoch_10.ckpt',
                         help='pretrained checkpoint path to load')
     parser.add_argument('--save_visual', default=False, action='store_true',
                         help='save depth and proba visualization or not')
@@ -211,8 +211,14 @@ if __name__ == "__main__":
     else:
         data_range = range(len(dataset))
     for i in tqdm(data_range):
+       
+       
+        
         imgs, proj_mats, init_depth_min, depth_interval, \
             scan, vid = decode_batch(dataset[i])
+        if os.path.exists(os.path.join(depth_dir, f'{scan}/depth_{vid:04d}.pfm')):
+            continue
+        print(scan,vid)
         
         os.makedirs(os.path.join(depth_dir, scan), exist_ok=True)
 
@@ -246,7 +252,17 @@ if __name__ == "__main__":
     point_dir = f'results/{args.dataset_name}/points'
     os.makedirs(point_dir, exist_ok=True)
     print('Fusing point clouds...')
-    
+
+
+
+    bbox_dict = {}
+    bbox_path = os.path.join(args.root_dir,"bbox.pkl")
+    import pickle as pkl
+    if os.path.exists(bbox_path):
+        with open(bbox_path,"rb") as f:
+            bbox_dict = pkl.load(f)
+
+
     for scan in scans:
         print(f'Processing {scan} ...')
         # buffers for the final vertices of this scan
@@ -263,9 +279,15 @@ if __name__ == "__main__":
                     image_ref = read_refined_image(args.dataset_name, scan, ref_vid)
                     depth_ref = depth_refined[ref_vid]
                 else:
-                    image_ref = read_image(args.dataset_name, args.root_dir, scan, ref_vid)
-                    image_ref = cv2.resize(image_ref, tuple(args.img_wh),
+                    try:
+                        image_ref = read_image(args.dataset_name, args.root_dir, scan, ref_vid)
+                        image_ref = cv2.resize(image_ref, tuple(args.img_wh),
                                            interpolation=cv2.INTER_LINEAR)[:,:,::-1] # to RGB
+                    except:
+                        image_ref = read_image(args.dataset_name,os.path.join(args.root_dir,args.split), scan, ref_vid)
+                        image_ref = cv2.resize(image_ref, tuple(args.img_wh),
+                                           interpolation=cv2.INTER_LINEAR)[:,:,::-1] # to RGB
+                    
                     depth_ref = read_pfm(f'results/{args.dataset_name}/depth/' \
                                          f'{scan}/depth_{ref_vid:04d}.pfm')[0]
                 proba_ref = read_pfm(f'results/{args.dataset_name}/depth/' \
@@ -285,9 +307,14 @@ if __name__ == "__main__":
                         image_src = read_refined_image(args.dataset_name, scan, src_vid)
                         depth_src = depth_refined[src_vid]
                     else:
-                        image_src = read_image(args.dataset_name, args.root_dir, scan, src_vid)
-                        image_src = cv2.resize(image_src, tuple(args.img_wh),
-                                               interpolation=cv2.INTER_LINEAR)[:,:,::-1] # to RGB
+                        try:
+                            image_src = read_image(args.dataset_name, args.root_dir, scan, src_vid)
+                            image_src = cv2.resize(image_src, tuple(args.img_wh),
+                                                interpolation=cv2.INTER_LINEAR)[:,:,::-1] # to RGB
+                        except:
+                            image_src = read_image(args.dataset_name, os.path.join(args.root_dir,args.split), scan, src_vid)
+                            image_src = cv2.resize(image_src, tuple(args.img_wh),
+                                                interpolation=cv2.INTER_LINEAR)[:,:,::-1] # to RGB
                         depth_src = read_pfm(f'results/{args.dataset_name}/depth/' \
                                              f'{scan}/depth_{src_vid:04d}.pfm')[0]
                         depth_refined[src_vid] = depth_src
@@ -347,9 +374,32 @@ if __name__ == "__main__":
         for prop in v_colors.dtype.names:
             vertex_all[prop] = v_colors[prop][:, 0]
 
+        # calculate bbox of the point clouds
+        x_min = vs['x'][:,0].min()
+        x_max = vs['x'][:,0].max()
+
+        y_min = vs['y'][:,0].min()
+        y_max = vs['y'][:,0].max()
+
+        z_min = vs['z'][:,0].min()
+        z_max = vs['z'][:,0].max()
+
+        bbox_dict[scan]={}
+        bbox_dict[scan]["x_min"] =  x_min
+        bbox_dict[scan]["y_min"] =  y_min
+        bbox_dict[scan]["z_min"] =  z_min
+        bbox_dict[scan]["x_max"] =  x_max
+        bbox_dict[scan]["y_max"] =  y_max
+        bbox_dict[scan]["z_max"] =  z_max
+        
+
+
+
         el = PlyElement.describe(vertex_all, 'vertex')
         PlyData([el]).write(f'{point_dir}/{scan}.ply')
         del vertex_all, vs, v_colors
+        with open(bbox_path,"wb") as f:
+            pkl.dump(bbox_dict,f)
     shutil.rmtree(f'results/{args.dataset_name}/image_refined')
 
     print('Done!')

@@ -1371,12 +1371,12 @@ class UNet2DConditionCrossFrameInExistingAttnModel(ModelMixin, ConfigMixin):
         # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
         timesteps = timesteps.expand(sample.shape[0])
 
-        if n_known_images > 0:
-            timesteps = timesteps.clone()
-            timesteps = expand_batch(timesteps, n_images_per_batch)
-            timesteps[:, 0:n_known_images] = 0
-            timesteps = collapse_batch(timesteps)
-            #print(f"set timestep 0 for n_known_images={n_known_images} -->", timesteps, timesteps.shape)
+        # if n_known_images is not None:
+        #     timesteps = timesteps.clone()
+        #     #timesteps = expand_batch(timesteps, n_images_per_batch)
+        #     timesteps[n_known_images] = 0
+        #     #timesteps = collapse_batch(timesteps)
+        #     #print(f"set timestep 0 for n_known_images={n_known_images} -->", timesteps, timesteps.shape)
         
         t_emb = self.time_proj(timesteps)
 

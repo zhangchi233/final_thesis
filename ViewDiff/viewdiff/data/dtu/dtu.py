@@ -304,7 +304,7 @@ class DTUDataset(Dataset):
 
         self.root_dir = config.root_dir
         self.split = config.split
-        assert self.split in ['train', 'val', 'test'], \
+        assert self.split in ['train', 'val', 'test',"advanced","intermediate"], \
             'split must be either "train", "val" or "test"!'
         
         self.dataset_id = config.dataset_id
@@ -314,6 +314,7 @@ class DTUDataset(Dataset):
         if config.img_wh is not None:
             if type(config.img_wh) is int:
                 self.img_wh = (config.img_wh, config.img_wh)
+            
             assert self.img_wh[0]%32==0 and self.img_wh[1]%32==0, \
                 'img_wh must both be multiples of 32!'
         self.debug = config.debug
@@ -416,6 +417,8 @@ class DTUDataset(Dataset):
                         
                         self.metas += [(scan, ref_view,None, src_views,None)]
         elif self.dataset_id=="tanks":
+            from collections import defaultdict
+           
             self.metas = []
             if self.split == 'intermediate':
                 self.scans = ['Family', 'Francis', 'Horse', 'Lighthouse',
@@ -459,8 +462,11 @@ class DTUDataset(Dataset):
                     for _ in range(num_viewpoint):
                         ref_view = int(f.readline().rstrip())
                         src_views = [int(x) for x in f.readline().rstrip().split()[1::2]]
-                        self.metas += [(scan, -1, ref_view, src_views)]
                         self.ref_views_per_scan[scan] += [ref_view]
+                        if len(src_views) <= 2:
+                            continue
+                        self.metas += [(scan, -1, ref_view, src_views)]
+                        
 
 
             
@@ -477,7 +483,7 @@ class DTUDataset(Dataset):
                 else:
                     proj_mat_filename = os.path.join(self.root_dir,
                                                     f'Cameras/{vid:08d}_cam.txt')
-                intrinsics, extrinsics, depth_min = \
+                intrinsics, extrinsics, depth_min,_ = \
                     self.read_cam_file(proj_mat_filename)
                 if self.img_wh is not None: # resize the intrinsics to the coarsest level
                     intrinsics[0] *= self.img_wh[0]/1600/4
@@ -545,6 +551,7 @@ class DTUDataset(Dataset):
                 self.proj_mats = proj_mats
 
         elif self.dataset_id == "tanks":
+            
             self.proj_mats = {} # proj mats for each scan
             for scan in self.scans:
                 self.proj_mats[scan] = {}
@@ -552,7 +559,7 @@ class DTUDataset(Dataset):
                 for vid in self.ref_views_per_scan[scan]:
                     proj_mat_filename = os.path.join(self.root_dir, self.split, scan,
                                                     f'cams/{vid:08d}_cam.txt')
-                    intrinsics, extrinsics, depth_min = \
+                    intrinsics, extrinsics, depth_min,depth_max = \
                         self.read_cam_file(proj_mat_filename)
                     intrinsics[0] *= self.img_wh[0]/img_w/4
                     intrinsics[1] *= self.img_wh[1]/img_h/4
@@ -868,6 +875,7 @@ class DTUDataset(Dataset):
             Rs = []
             intensity_stats =[]
             index = np.random.permutation(np.array([0,1,1]))
+            sample["index"] = torch.tensor(index)
 
             x_min = self.bbox[f"{scan}"]["x_min"]
             x_max = self.bbox[f"{scan}"]["x_max"]
@@ -887,8 +895,13 @@ class DTUDataset(Dataset):
            
             for i, vid in enumerate(view_ids):
                 img_filename = os.path.join(self.root_dir, self.split, scan, f'images/{vid:08d}.jpg')
-                sample["small_mask"].append(torch.zeros(self.img_wh[0]//8,self.img_wh[1]//8))
+                sample["small_mask"].append(torch.zeros(self.img_wh[1]//8,self.img_wh[0]//8))
+               
                 if task == "flare" and not index[i]:
+                    flare_file_path = "/root/autodl-tmp/lens_flare"
+                    files = os.listdir(flare_file_path)
+                    flare_file = random.choice(files)
+                    flare_file_path = os.path.join(flare_file_path,flare_file)
                     img,small_mask = add_lens_flare(img_filename,flare_file_path)
                     
                     # resize the mask to the target size

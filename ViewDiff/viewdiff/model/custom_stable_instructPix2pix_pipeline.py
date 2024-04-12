@@ -621,6 +621,7 @@ class CustomInstructPix2pixDiffusionPipeline(
         self,
         prompt: Union[str, List[str]] = None,
         known_images: Optional[torch.FloatTensor] = None,
+        existed_index = None,
         height: Optional[int] = None,
         width: Optional[int] = None,
         num_inference_steps: int = 50,
@@ -781,11 +782,8 @@ class CustomInstructPix2pixDiffusionPipeline(
         
 
         # 5.a check if known_images are provided as input
-        n_known_images = 0
-        # if known_images is not None:
-        #     n_known_images = known_images.shape[0]
-        #     known_image_latents = self._encode_vae_image(image=known_images, generator=generator)
-        #     latents[:n_known_images] = known_image_latents
+        
+        
 
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
@@ -796,10 +794,17 @@ class CustomInstructPix2pixDiffusionPipeline(
         rendered_mask_per_layer_list = []
         image_list = []
         cached_vol_rend_grids = []
+        existed_index = None
+        if existed_index is not None:
+            n_known_images = existed_index.flatten().bool()
+            print(n_known_images)
+            
+            latents[n_known_images]  = image_latents[:latents.shape[0]][n_known_images]
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
                 latent_model_input = torch.cat([latents] * 3) if do_classifier_free_guidance else latents
+                
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
                
                 latent_model_input = torch.cat([latent_model_input, image_latents], dim=1)
@@ -811,7 +816,7 @@ class CustomInstructPix2pixDiffusionPipeline(
                     encoder_hidden_states=prompt_embeds,
                     cross_attention_kwargs=cross_attention_kwargs,
                     return_dict=True,
-                    n_known_images=n_known_images if known_images is not None else 0,
+                    n_known_images=n_known_images if existed_index is not None else 0,
                     n_images_per_batch=n_images_per_batch if known_images is not None else 0,
                 )
                 model_pred = output.unet_sample
@@ -830,6 +835,7 @@ class CustomInstructPix2pixDiffusionPipeline(
                 #     model_pred = rescale_noise_cfg(model_pred, noise_pred_text,noise_pred_image, guidance_rescale=0.0)
 
                 # compute the previous noisy sample x_t -> x_t-1
+                n_known_images=0
                 if known_images is not None:
                     latents[n_known_images:] = self.scheduler.step(model_pred[n_known_images:], t, latents[n_known_images:], **extra_step_kwargs, return_dict=False)[0]
                 else:

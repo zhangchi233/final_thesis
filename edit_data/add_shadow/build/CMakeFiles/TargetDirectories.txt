@@ -1,3 +1,0 @@
-/root/autodl-tmp/edit_data/add_shadow/build/CMakeFiles/rebuild_cache.dir
-/root/autodl-tmp/edit_data/add_shadow/build/CMakeFiles/edit_cache.dir
-/root/autodl-tmp/edit_data/add_shadow/build/CMakeFiles/ShadowEffect.dir

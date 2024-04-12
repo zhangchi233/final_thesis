@@ -544,7 +544,7 @@ def train_step(
         
         batch["prompt"] = collapse_prompt_to_batch_dim(batch["prompt"], finetune_config.model.n_input_images)
        
-
+        # _,trainable_index = batch["index"]
 
 
 
@@ -675,6 +675,7 @@ def train_step(
             timesteps,
             encoder_hidden_states,
             cross_attention_kwargs=cross_attention_kwargs,
+            #n_known_images = trainable_index
         )
        
         unet_pred = output.unet_sample
@@ -868,7 +869,7 @@ def test_step(
 
     batch["images"] = 2*batch["images"]-1
     batch["target_imgs"] = 2*batch["target_imgs"]-1
-    
+    _, index = collapse_tensor_to_batch_dim(batch["index"])
     # parse batch
     # collapse K dimension into batch dimension (no concatenation happening)
     batch["prompt"] = [cap[0] for cap in batch["prompt"]]
@@ -947,6 +948,7 @@ def test_step(
             decode_all_timesteps=True,
             num_inference_steps=num_inference_steps,
             n_images_per_batch=model_config.n_input_images,
+            existed_index=index
         )
 
         # re-create K dimension from batch dimension
