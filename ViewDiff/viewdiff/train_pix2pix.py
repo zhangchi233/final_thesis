@@ -77,7 +77,7 @@ from torch.utils.tensorboard import SummaryWriter
 # define logger path
 logger_path = os.path.join(os.path.dirname(__file__), "..", "logs")
 # define tensorboard writer
-writer = SummaryWriter("/workspace/tf_dir")
+writer = SummaryWriter("/root/tf-logs")
 
 
 
@@ -213,68 +213,68 @@ def train_and_test(
         # ################
         
         
-        unet.eval()
-        update_vol_rend_inject_noise_sigma(accelerator.unwrap_model(unet), 0.0)  # disable vol-rend noise
-        update_n_novel_images(accelerator.unwrap_model(unet), 0)  # disable skipping frame in inference mode
-        torch.cuda.empty_cache()
-        logger.info(f"Running validation...")
-        # create pipeline
-        if finetune_config.model.use_ema:
-            # Store the UNet parameters temporarily and load the EMA parameters to perform inference.
-            ema_unet.store(unet.parameters())
-            ema_unet.copy_to(unet.parameters())
-        # The models need unwrapping because for compatibility in distributed training mode.
-        pipeline = CustomInstructPix2pixDiffusionPipeline.from_pretrained(
-            finetune_config.io.pretrained_model_name_or_path,
-            unet=accelerator.unwrap_model(unet),
-            text_encoder=accelerator.unwrap_model(text_encoder),
-            vae=accelerator.unwrap_model(vae),
-            revision=finetune_config.io.revision,
-            torch_dtype=weight_dtype,
-        )
-        pipeline = pipeline.to(accelerator.device)
-        pipeline.set_progress_bar_config(disable=False)
-        pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(pipeline.scheduler.config)
-        pipeline.scheduler.config.prediction_type = finetune_config.training.noise_prediction_type
-        if (
-            accelerator.is_main_process
-            and finetune_config.training.validation_epochs > 0
-            and (epoch % finetune_config.training.validation_epochs) == 0
-        ):
-            for i in range(1):
+        # unet.eval()
+        # update_vol_rend_inject_noise_sigma(accelerator.unwrap_model(unet), 0.0)  # disable vol-rend noise
+        # update_n_novel_images(accelerator.unwrap_model(unet), 0)  # disable skipping frame in inference mode
+        # torch.cuda.empty_cache()
+        # logger.info(f"Running validation...")
+        # # create pipeline
+        # if finetune_config.model.use_ema:
+        #     # Store the UNet parameters temporarily and load the EMA parameters to perform inference.
+        #     ema_unet.store(unet.parameters())
+        #     ema_unet.copy_to(unet.parameters())
+        # # The models need unwrapping because for compatibility in distributed training mode.
+        # pipeline = CustomInstructPix2pixDiffusionPipeline.from_pretrained(
+        #     finetune_config.io.pretrained_model_name_or_path,
+        #     unet=accelerator.unwrap_model(unet),
+        #     text_encoder=accelerator.unwrap_model(text_encoder),
+        #     vae=accelerator.unwrap_model(vae),
+        #     revision=finetune_config.io.revision,
+        #     torch_dtype=weight_dtype,
+        # )
+        # pipeline = pipeline.to(accelerator.device)
+        # pipeline.set_progress_bar_config(disable=False)
+        # pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(pipeline.scheduler.config)
+        # pipeline.scheduler.config.prediction_type = finetune_config.training.noise_prediction_type
+        # if (
+        #     accelerator.is_main_process
+        #     and finetune_config.training.validation_epochs > 0
+        #     and (epoch % finetune_config.training.validation_epochs) == 0
+        # ):
+        #     for i in range(1):
                 
-                # in case the validation dataloader is exhausted, restart it
-                try:
-                    validation_batch = next(validation_iter)  # always use fixed validation_batch
+        #         # in case the validation dataloader is exhausted, restart it
+        #         try:
+        #             validation_batch = next(validation_iter)  # always use fixed validation_batch
 
-                except:
-                    validation_iter = iter(validation_dataloader)
-                    validation_batch = next(validation_iter) 
+        #         except:
+        #             validation_iter = iter(validation_dataloader)
+        #             validation_batch = next(validation_iter) 
                 
                 
 
-                # run inference on one batch of the validation set
+        #         # run inference on one batch of the validation set
                 
-                test_step(
-                    pipeline=pipeline,
-                    batch=validation_batch,
-                    model_config=finetune_config.model,
-                    cfa_config=finetune_config.cross_frame_attention,
-                    io_config=finetune_config.io,
-                    generator=generator,
-                    prefix="Validation",
-                    global_step=global_step,
-                    writer=accelerator.trackers[0].writer,
-                    orig_hw=(validation_dataset_config.batch.image_height, validation_dataset_config.batch.image_width),
-                )
-                global_step+=1
+        #         test_step(
+        #             pipeline=pipeline,
+        #             batch=validation_batch,
+        #             model_config=finetune_config.model,
+        #             cfa_config=finetune_config.cross_frame_attention,
+        #             io_config=finetune_config.io,
+        #             generator=generator,
+        #             prefix="Validation",
+        #             global_step=global_step,
+        #             writer=accelerator.trackers[0].writer,
+        #             orig_hw=(validation_dataset_config.batch.image_height, validation_dataset_config.batch.image_width),
+        #         )
+        #         global_step+=1
 
-            if finetune_config.model.use_ema:
-                # Switch back to the original UNet parameters.
-                ema_unet.restore(unet.parameters())
+        #     if finetune_config.model.use_ema:
+        #         # Switch back to the original UNet parameters.
+        #         ema_unet.restore(unet.parameters())
 
-            del pipeline
-            torch.cuda.empty_cache()
+        #     del pipeline
+        #     torch.cuda.empty_cache()
 
 
 

@@ -993,7 +993,7 @@ class DTUDataset(Dataset):
             # use only the reference view and first nviews-1 source views
             # shuffle the source views
 
-            view_ids = [ref_view] + src_views[:self.n_views-1]
+            view_ids = [ref_view] + src_views[-self.n_views+1:]
             light_input = np.random.choice(7,3)
             
             input_lights=light_input
@@ -1028,7 +1028,9 @@ class DTUDataset(Dataset):
             z_min = self.bbox[f"{scan}_train"]["z"]["min"]
             z_max = self.bbox[f"{scan}_train"]["z"]["max"]
 
-            sample['prompt'] = [f"modify the lightness of image to light_class_{light_idx} style"]
+            sample['prompt'] = [f"modify the lightness of image by {target_light-light_input[0]} scale ",
+                                f"modify the lightness of image by {target_light-light_input[1]} scale ",
+                                f"modify the lightness of image by {target_light-light_input[2]} scale "]
             for i, vid in enumerate(view_ids):
             # NOTE that the id in image file names is from 1 to 49 (not 0~48)
             
@@ -1127,8 +1129,7 @@ class DTUDataset(Dataset):
             
 
             sample['target_imgs'] = target_imgs
-            small_mask = sample["masks"]["level_0"]
-            small_wh = (80,64)
+            
             sample["class"] = torch.tensor([light_idx])
             sample["small_mask"] = sample["masks"]["level_3"]
 

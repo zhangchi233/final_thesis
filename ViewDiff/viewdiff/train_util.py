@@ -30,13 +30,13 @@ from accelerate.utils import ProjectConfiguration, set_seed
 from accelerate.utils.operations import recursively_apply
 from accelerate.tracking import GeneralTracker, on_main_process, logger
 
-from io_util import convert_to_tensorboard_dict, IOConfig
+from .io_util import convert_to_tensorboard_dict, IOConfig
 
-from data.co3d.co3d_dataset import CO3DConfig, CO3DDataset, CO3DDreamboothDataset
-from data.dtu.dtu import DTUConfig, DTUDataset
+from .data.co3d.co3d_dataset import CO3DConfig, CO3DDataset, CO3DDreamboothDataset
+from .data.dtu.dtu import DTUConfig, DTUDataset
 
-from model.util import ModelConfig, CrossFrameAttentionConfig
-from model.custom_unet_2d_condition import (
+from .model.util import ModelConfig, CrossFrameAttentionConfig
+from .model.custom_unet_2d_condition import (
     UNet2DConditionCrossFrameInExistingAttnModel
 )
 from diffusers.loaders import LoraLoaderMixin
