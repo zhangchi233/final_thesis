@@ -717,6 +717,7 @@ class CustomInstructPix2pixDiffusionPipeline(
 
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
+            print(prompt)
             batch_size = 1
         elif prompt is not None and isinstance(prompt, list):
             batch_size = len(prompt)
@@ -733,8 +734,8 @@ class CustomInstructPix2pixDiffusionPipeline(
         if do_classifier_free_guidance:
             # make sure that `guidance_scale` is always greater than `1` to avoid
             # numerical instability in the classifier free guidance
-            guidance_scale = max(guidance_scale, 1.0)
-            image_guidance_scale = max(image_guidance_scale, 1.0)
+            guidance_scale = max(guidance_scale, 0)
+            image_guidance_scale = max(image_guidance_scale, 0)
 
         # 3. Encode input prompt
         text_encoder_lora_scale = (
@@ -799,7 +800,7 @@ class CustomInstructPix2pixDiffusionPipeline(
             n_known_images = existed_index.flatten().bool()
             print(n_known_images)
             
-            latents[n_known_images]  = image_latents[:latents.shape[0]][n_known_images]
+            latents[:n_known_images]  = image_latents[:latents.shape[0]][:n_known_images]
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance

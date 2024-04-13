@@ -40,6 +40,13 @@ print(path)
 import cv2
 import numpy as np
 import random
+def gamma_trans(img,gamma):
+ 
+    gamma_table = [np.power(x/255.0,gamma)*255.0 for x in range(256)]
+    gamma_table = np.round(np.array(gamma_table)).astype(np.uint8)
+    #实现映射用的是Opencv的查表函数
+    return cv2.LUT(img,gamma_table)
+
 def filter_flare(image_path):
     # Load the lens flare image
     flare_image_path = image_path
@@ -390,7 +397,7 @@ class DTUDataset(Dataset):
                                 if light_idx!=0 or scan !="scan106":
                                     continue
                                 else:
-                                    self.metas += [(scan, ref_view,light_idx, src_views,int(np.argmin(losses)))]
+                                    self.metas += [(scan, ref_view,int(np.argmax(losses)), src_views,int(np.argmin(losses)))]
                            
         
         elif self.dataset_id == "eth3d":
@@ -1007,17 +1014,16 @@ class DTUDataset(Dataset):
             # shuffle the source views
 
             view_ids = [ref_view] + src_views[-self.n_views+1:]
-            light_input = np.random.choice(7,3)
             
-            input_lights=light_input
+           
             target_light = target_light
 
 
 
             # output_key = f"{scan}_{ref_view}_{src_views[0]}_{src_views[1]}"
             # if self.total_pkl:
-            #     target_light = self.total_pkl[scan]
-            #     target_light = np.argmin(target_light)
+            #     light_input = self.total_pkl[scan]
+            #     light_input = np.argmax(target_light)
             # else:
             #     target_light = self.output_pkl[output_key]
             #     target_light = np.argmin(target_light)
@@ -1040,15 +1046,13 @@ class DTUDataset(Dataset):
             y_max = self.bbox[f"{scan}_train"]["y"]["max"]
             z_min = self.bbox[f"{scan}_train"]["z"]["min"]
             z_max = self.bbox[f"{scan}_train"]["z"]["max"]
-
-            sample['prompt'] = [f"modify the lightness of image by {target_light-light_input[0]} scale ",
-                                f"modify the lightness of image by {target_light-light_input[1]} scale ",
-                                f"modify the lightness of image by {target_light-light_input[2]} scale "]
+            sample["small_mask"]=[]
+            sample['prompt'] = [f"modify the lightness of image to light_class_{light_idx} style"]
             for i, vid in enumerate(view_ids):
             # NOTE that the id in image file names is from 1 to 49 (not 0~48)
             
                 img_filename = os.path.join(self.root_dir,
-                                f'Rectified/{scan}_train/rect_{vid+1:03d}_{input_lights[i]}_r5000.png')
+                                f'Rectified/{scan}_train/rect_{vid+1:03d}_{light_idx}_r5000.png')
                 target_filename = os.path.join(self.root_dir,
                                 f'Rectified/{scan}_train/rect_{vid+1:03d}_{target_light}_r5000.png')
                 mask_filename = os.path.join(self.root_dir,
@@ -1062,18 +1066,25 @@ class DTUDataset(Dataset):
                 if self.img_wh is not None:
                     img = img.resize(self.img_wh, Image.BILINEAR)
                     target_img = target_img.resize(self.img_wh, Image.BILINEAR)
-                # if input_lights[i] != target_light:
-                #     # make image brighter or darker
-                #     img = np.array(img)
-                #     if input_lights[i] > target_light:
-                #         # increase contrast and the image looks 
-                #         alpha = np.random.uniform(1.5, 2)
-                #         beta = np.random.uniform(10, 15)
-                #         img = cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
-                #     else:
-                #         alpha = np.random.uniform(0.5, 0.75)
-                #         beta = np.random.uniform(-15, -10)
-                #         img = cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
+                if light_idx != target_light:
+                    # make image brighter or darker
+                    img = np.array(img)
+                    print("image iput is: ",img.min(),img.max())
+                    if light_idx > target_light:
+                        # implement gamma transformation
+                        gamma = np.random.uniform(0.15,0.5)
+                        eps = 1e-7
+                       
+                        gamma_trans(img,gamma)
+    
+                        # add gaussian noise
+                        
+                        
+                    else:
+                        gamma = np.random.uniform(5, 9)
+                        gamma_trans(img,gamma)
+                        
+                       
                         
                     
 
@@ -1090,7 +1101,7 @@ class DTUDataset(Dataset):
 
 
                 if i == 0:  # reference view
-                    sample["small_mask"]=[]
+                   
                     
                     sample['init_depth_min'] = torch.FloatTensor([depth_min])
                     
@@ -1103,16 +1114,21 @@ class DTUDataset(Dataset):
                     sample["depth"] = sample["depths"]["level_0"]
                     ref_proj_inv = torch.inverse(proj_mat_ls)
                 else:
+                    
                     # small_mask = self.read_mask(mask_filename)["level_0"]
                     # small_wh = (self.img_wh[0]/8,self.img_wh[1]/8)
                     # sample["small_mask"] = interpolate(small_mask[None,None].float(), small_wh, mode='nearest')[0,0].byte()
                     
                     proj_mats += [proj_mat_ls @ ref_proj_inv]
+                sample["small_mask"].append(self.read_mask(mask_filename)["level_3"])
                 var, mean = torch.var_mean(img)
                 intensity_stat = torch.stack([mean, var], dim=0)
                 intensity_stats.append(intensity_stat)
         
-        
+            sample["small_mask"] = torch.stack(sample["small_mask"])
+            sample["small_mask"] = sample["small_mask"].unsqueeze(1)
+            sample["small_mask"] = sample["small_mask"].bool()
+
             imgs = torch.stack(imgs) # (V, 3, H, W)
             
             target_imgs = torch.stack(target_imgs)
@@ -1144,8 +1160,7 @@ class DTUDataset(Dataset):
             sample['target_imgs'] = target_imgs
             
             sample["class"] = torch.tensor([light_idx])
-            sample["small_mask"] = sample["masks"]["level_3"]
-
+            
             sample["bbox"] =torch.tensor([[x_min,y_min,z_min], 
                                         [x_max,y_max,z_max]], dtype=torch.float32)
 

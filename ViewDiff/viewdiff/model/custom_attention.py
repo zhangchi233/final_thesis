@@ -390,7 +390,7 @@ class BasicTransformerWithCrossFrameAttentionBlock(BasicTransformerBlock):
         if "rendered_depth" not in kwargs:
             kwargs["rendered_depth"] = []
         
-        print(kwargs["orig_hw"],unproj_reproj_depth.shape)
+       
         
         kwargs["rendered_depth"].append(unproj_reproj_depth.detach().cpu())
         if "rendered_mask" not in kwargs:

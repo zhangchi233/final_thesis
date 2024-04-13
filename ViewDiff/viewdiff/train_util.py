@@ -30,17 +30,50 @@ from accelerate.utils import ProjectConfiguration, set_seed
 from accelerate.utils.operations import recursively_apply
 from accelerate.tracking import GeneralTracker, on_main_process, logger
 
-from .io_util import convert_to_tensorboard_dict, IOConfig
+from io_util import convert_to_tensorboard_dict, IOConfig
 
-from .data.co3d.co3d_dataset import CO3DConfig, CO3DDataset, CO3DDreamboothDataset
-from .data.dtu.dtu import DTUConfig, DTUDataset
+from data.co3d.co3d_dataset import CO3DConfig, CO3DDataset, CO3DDreamboothDataset
+from data.dtu.dtu import DTUConfig, DTUDataset
 
-from .model.util import ModelConfig, CrossFrameAttentionConfig
-from .model.custom_unet_2d_condition import (
+from model.util import ModelConfig, CrossFrameAttentionConfig
+from model.custom_unet_2d_condition import (
     UNet2DConditionCrossFrameInExistingAttnModel
 )
 from diffusers.loaders import LoraLoaderMixin
 import bitsandbytes
+import cv2
+import numpy as np
+
+def apply_gamma_correction(image, gamma):
+    invGamma = 1.0 / gamma
+    table = np.array([((i / 255.0) ** invGamma) * 255
+                      for i in np.arange(0, 256)]).astype("uint8")
+    return cv2.LUT(image, table)
+
+def add_gaussian_noise(image, mean=0):
+    B = np.random.uniform(0, 1)
+    sigma = np.sqrt(B * (25 / 255)**2)
+    gaussian_noise = np.random.normal(mean, sigma, image.shape)
+    noisy_image = cv2.add(image.astype('float64'), gaussian_noise)
+    noisy_image = np.clip(noisy_image, 0, 255).astype('uint8')
+    return noisy_image
+
+def generate_data(image_path):
+    # Read the original image
+    original_image = cv2.imread(image_path)
+    if original_image is None:
+        raise ValueError("Image not found")
+
+    # Gamma correction
+    gamma = np.random.uniform(2, 5)
+    darkened_image = apply_gamma_correction(original_image, gamma)
+    
+    # Add Gaussian noise
+    final_image = add_gaussian_noise(darkened_image)
+
+    return final_image
+
+
 
 @dataclass
 class TrainingConfig:
