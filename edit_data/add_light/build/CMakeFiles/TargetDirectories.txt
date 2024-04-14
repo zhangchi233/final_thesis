@@ -1,3 +1,0 @@
-/root/autodl-tmp/edit_data/add_light/build/CMakeFiles/MyOpenCVProject.dir
-/root/autodl-tmp/edit_data/add_light/build/CMakeFiles/edit_cache.dir
-/root/autodl-tmp/edit_data/add_light/build/CMakeFiles/rebuild_cache.dir

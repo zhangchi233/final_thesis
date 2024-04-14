@@ -359,7 +359,7 @@ class BasicTransformerWithCrossFrameAttentionBlock(BasicTransformerBlock):
             latents = hidden_state.reshape(N, h, w, C)
         except:
             hw_resp = hw*0.8
-           
+
             h  =math.floor(math.sqrt(hw_resp))
 
             w  = int(1.25*h)
@@ -389,6 +389,8 @@ class BasicTransformerWithCrossFrameAttentionBlock(BasicTransformerBlock):
         # save rendered mask & depth for logging --> already convert to cpu
         if "rendered_depth" not in kwargs:
             kwargs["rendered_depth"] = []
+        
+       
         
         kwargs["rendered_depth"].append(unproj_reproj_depth.detach().cpu())
         if "rendered_mask" not in kwargs:
