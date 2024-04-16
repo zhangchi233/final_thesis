@@ -128,4 +128,4 @@ def convert_checkpoint_to_model(
 
 
 if __name__ == "__main__":
-    convert_checkpoint_to_model("/openbayes/home/output_var_unproj/all/subset_all/input_3/train/class6/checkpoint-30000")
+    convert_checkpoint_to_model("/root/autodl-tmp/output_var_unproj_eth2/all/subset_all/input_3/train/class6/checkpoint-6000")

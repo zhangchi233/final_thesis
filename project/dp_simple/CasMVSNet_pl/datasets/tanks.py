@@ -17,6 +17,7 @@ class TanksDataset(Dataset):
         """
         self.root_dir = root_dir
         self.img_wh = img_wh
+        
         assert img_wh[0]%32==0 and img_wh[1]%32==0, \
             'img_wh must both be multiples of 32!'
         self.split = split
@@ -146,6 +147,7 @@ class TanksDataset(Dataset):
                 proj_mats += [proj_mat_ls @ ref_proj_inv]
 
         imgs = torch.stack(imgs) # (V, 3, H, W)
+        print(view_ids,scan)
         proj_mats = torch.stack(proj_mats)[:,:,:3] # (V-1, self.levels, 3, 4) from fine to coarse
 
         sample['imgs'] = imgs

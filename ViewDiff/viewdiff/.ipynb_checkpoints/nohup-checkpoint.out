@@ -1,0 +1,272 @@
+The following values were not passed to `accelerate launch` and had defaults used instead:
+	`--num_processes` was set to a value of `1`
+	`--num_machines` was set to a value of `1`
+	`--mixed_precision` was set to a value of `'no'`
+	`--dynamo_backend` was set to a value of `'no'`
+To avoid this warning pass in values for each of the problematic parameters or run `accelerate config`.
+/root/autodl-tmp/instructpix2pix/lib/python3.8/site-packages/tyro/_resolver.py:305: UserWarning: <class 'float'> does not match any type in Union: [<class 'int'>, <class 'NoneType'>]
+  warnings.warn(
+/root/autodl-tmp/instructpix2pix/lib/python3.8/site-packages/tyro/_fields.py:826: UserWarning: Mutable type <class 'viewdiff.io_util.SaveConfig'> is used as a default value for `save`. This is dangerous! Consider using `dataclasses.field(default_factory=...)` or marking <class 'viewdiff.io_util.SaveConfig'> as frozen.
+  warnings.warn(
+04/01/2024 02:59:21 - INFO - __main__ - Distributed environment: NO
+Num processes: 1
+Process index: 0
+Local process index: 0
+Device: cuda
+
+Mixed precision type: bf16
+
+{'timestep_spacing', 'clip_sample_range', 'variance_type', 'sample_max_value', 'thresholding', 'dynamic_thresholding_ratio'} was not found in config. Values will be initialized to default values.
+{'force_upcast', 'scaling_factor'} was not found in config. Values will be initialized to default values.
+{'projection_class_embeddings_input_dim', 'time_embedding_dim', 'mid_block_type', 'transformer_layers_per_block', 'timestep_post_act', 'addition_embed_type_num_heads', 'time_cond_proj_dim', 'encoder_hid_dim', 'encoder_hid_dim_type', 'time_embedding_act_fn', 'addition_time_embed_dim', 'resnet_out_scale_factor', 'conv_in_kernel', 'resnet_skip_time_act', 'conv_out_kernel', 'resnet_time_scale_shift', 'class_embeddings_concat', 'attention_type', 'num_attention_heads', 'mid_block_only_cross_attention', 'class_embed_type', 'addition_embed_type', 'upcast_attention', 'dropout', 'cross_attention_norm', 'time_embedding_type'} was not found in config. Values will be initialized to default values.
+04/01/2024 03:00:22 - INFO - __main__ - Initializing the StableDiffusion3D UNet from the pretrained UNet.
+/root/autodl-tmp/ViewDiff/viewdiff
+/root/autodl-tmp/ViewDiff/viewdiff
+scan scan2 mean output: [1.00121434 0.97192338 0.96325176 0.9620754  0.96730371 0.97451435
+ 0.98707856]
+scan scan6 mean output: [1.11856514 1.0349555  1.01148678 1.00809412 1.00456903 1.02157744
+ 1.05318288]
+scan scan7 mean output: [2.80176354 2.98415808 3.08893367 3.06841932 3.10951912 3.1721381
+ 2.96063437]
+scan scan8 mean output: [1.19103727 1.09251997 1.09845439 1.09647759 1.16365631 1.21807814
+ 1.26017903]
+scan scan14 mean output: [1.97682371 1.88708503 1.85337303 1.86532249 1.89953903 2.03141878
+ 2.11037798]
+scan scan16 mean output: [3.1915682  3.25915756 3.22970628 3.21195235 3.26540529 3.16314249
+ 3.15736253]
+scan scan18 mean output: [2.05124783 2.013102   1.9762233  1.97305491 1.94199959 1.96142664
+ 2.00164497]
+scan scan19 mean output: [1.42494544 1.44790176 1.42633028 1.43245512 1.41559309 1.43743257
+ 1.49461799]
+scan scan20 mean output: [2.16098818 2.17821048 2.15450914 2.14886178 2.14548533 2.15932194
+ 2.23102642]
+scan scan22 mean output: [1.84457468 1.76052218 1.72700193 1.70638893 1.6944377  1.70606693
+ 1.75517236]
+scan scan30 mean output: [8.67458678 8.59489073 8.69847434 8.68814547 8.62376398 8.5837679
+ 8.51076824]
+scan scan31 mean output: [2.31524642 2.25100664 2.26015923 2.24801694 2.2719446  2.35124722
+ 2.43751027]
+scan scan36 mean output: [2.63409314 2.46368888 2.46062461 2.43784512 2.47157738 2.49926177
+ 2.58666817]
+scan scan39 mean output: [2.37594525 2.31825419 2.30938649 2.28579744 2.29160664 2.37218753
+ 2.46592282]
+scan scan41 mean output: [1.66476584 1.60040762 1.59964506 1.59753174 1.62585583 1.64422795
+ 1.66758125]
+scan scan42 mean output: [2.95913485 2.90192703 2.82472118 2.82756103 2.83083466 2.84663147
+ 3.02270986]
+scan scan44 mean output: [2.41167771 2.38853236 2.34733436 2.3156443  2.31195744 2.31628597
+ 2.38618758]
+scan scan45 mean output: [1.66468076 1.67245606 1.68474703 1.67637421 1.65131788 1.71283245
+ 1.60885482]
+scan scan46 mean output: [1.29634672 1.28409807 1.26796138 1.26884852 1.25513599 1.27678512
+ 1.28780049]
+scan scan47 mean output: [11.23890356 10.62560907 10.38173617 10.33011346 10.41427073 10.89797371
+ 11.45373098]
+scan scan50 mean output: [4.78126085 4.6839368  4.68366494 4.67832368 4.68632154 4.81935768
+ 4.82078136]
+scan scan51 mean output: [1.38731192 1.30007031 1.28973332 1.29298134 1.31923183 1.32288761
+ 1.39191384]
+scan scan52 mean output: [6.39765668 6.71479313 7.32903373 7.36236764 7.29158699 6.97721179
+ 6.38887133]
+scan scan53 mean output: [6.57723425 7.27589331 7.38309274 7.2946379  7.4625387  7.67598391
+ 6.51365198]
+scan scan55 mean output: [1.69197897 1.63865039 1.64135865 1.63935601 1.66539767 1.70896921
+ 1.78418155]
+scan scan57 mean output: [1.71960834 1.59272069 1.58916454 1.58068859 1.57162419 1.61019183
+ 1.64975446]
+scan scan58 mean output: [2.24748354 2.17271329 2.12357374 2.09704737 2.13028055 2.16428077
+ 2.24225527]
+scan scan60 mean output: [10.0765839  10.713741   10.83717628 10.72482792 10.65179486 10.05052784
+  8.91400745]
+scan scan61 mean output: [1.34369714 1.28631924 1.34006934 1.33217524 1.37976855 1.46957162
+ 1.40087494]
+scan scan63 mean output: [7.95549631 8.00294294 7.99245622 7.98088335 8.0994514  8.011342
+ 7.50288264]
+scan scan64 mean output: [9.61688464 9.76545364 9.4716502  9.27641999 9.16097031 8.93420555
+ 8.70215934]
+scan scan65 mean output: [2.47293989 2.1114776  2.03738769 2.03424759 2.05745113 2.09894038
+ 2.23646499]
+scan scan68 mean output: [1.66418732 1.54708171 1.55255918 1.54454011 1.60591144 1.68637406
+ 1.66911975]
+scan scan69 mean output: [2.07839942 1.71989811 1.57556223 1.53391165 1.5258197  1.58260642
+ 1.71275553]
+scan scan70 mean output: [6.08255564 5.70765056 5.58918495 5.5997456  5.63302205 5.86396391
+ 6.33816176]
+scan scan71 mean output: [2.4684212  2.04934821 1.8593077  1.81687432 1.82307946 1.87917591
+ 1.97769005]
+scan scan72 mean output: [5.42979493 4.98342379 4.74852921 4.70286036 4.70392189 4.81169244
+ 5.190466  ]
+scan scan74 mean output: [6.19517582 6.1203795  6.00283794 5.99464523 6.01317631 5.97329591
+ 5.93384791]
+scan scan76 mean output: [2.52154994 2.46967198 2.42213043 2.42903319 2.45165442 2.4932581
+ 2.67943018]
+scan scan83 mean output: [5.78417572 5.60813875 5.5824187  5.59089596 5.61494345 5.75872464
+ 6.14112679]
+scan scan84 mean output: [4.81248867 4.73980808 4.64406028 4.62658724 4.64393221 4.72740636
+ 5.06771795]
+scan scan85 mean output: [8.09187486 5.58834374 5.07499904 4.93354202 5.00643232 5.12534594
+ 5.44755901]
+scan scan87 mean output: [10.27863458  9.28198363  8.86244189  8.76100429  8.95012405  9.33165627
+ 11.22065983]
+scan scan88 mean output: [12.53427557 11.66079711 11.2207347  11.16631215 11.3067646  12.05679975
+ 13.51323437]
+scan scan89 mean output: [3.10886091 1.84053157 1.57470665 1.4852684  1.43455578 1.45991223
+ 1.76265765]
+scan scan90 mean output: [2.91044355 2.14173189 1.87538047 1.80021106 1.68886491 1.86459352
+ 2.09340844]
+scan scan91 mean output: [4.1554668  3.15375396 2.79960795 2.60254759 2.62762953 2.77030982
+ 3.16996982]
+scan scan92 mean output: [3.44822968 2.92558409 2.46401183 2.36850045 2.37061088 2.37754278
+ 2.6572957 ]
+scan scan93 mean output: [2.47878795 2.42562657 2.3478494  2.33718573 2.31991502 2.36878802
+ 2.54261788]
+scan scan94 mean output: [2.25050864 2.15269626 2.12538479 2.10822735 2.11139564 2.16234145
+ 2.31182622]
+scan scan95 mean output: [3.02138372 2.92085865 2.87007221 2.83432269 2.89923202 2.94220613
+ 3.32199339]
+scan scan96 mean output: [3.56508471 3.47703425 3.44893682 3.41940667 3.42401943 3.53237321
+ 3.7412994 ]
+scan scan97 mean output: [2.74131069 2.66731166 2.65141736 2.64831129 2.63753103 2.69091483
+ 2.84743998]
+scan scan98 mean output: [4.32465715 4.21557355 4.19174789 4.20941    4.23795416 4.30376435
+ 4.56633065]
+scan scan99 mean output: [1.89460801 1.83698884 1.81319355 1.80834472 1.81198793 1.83644629
+ 1.96337358]
+scan scan100 mean output: [4.37227584 4.20406946 4.1266844  4.09965451 4.13235198 4.19584484
+ 4.44129949]
+scan scan101 mean output: [10.98790638 10.51371385 10.07423857 10.14579899 10.08343843 10.57270488
+ 11.77931405]
+scan scan102 mean output: [14.89902821 14.11591781 13.57399777 13.26589634 13.29806149 13.27530462
+ 13.84596409]
+scan scan103 mean output: [1.96966011 1.88718121 1.85632959 1.84724409 1.85666614 1.89407913
+ 2.0532192 ]
+scan scan104 mean output: [8.07298178 7.76581244 7.65959314 7.45407124 7.64064978 7.87105531
+ 8.93807717]
+scan scan105 mean output: [3.92992292 3.8236729  3.78583217 3.81376588 3.82348662 3.92253066
+ 4.54122754]
+scan scan107 mean output: [2.95482818 2.72223734 2.62752161 2.57842151 2.58153874 2.7260572
+ 2.93490657]
+scan scan108 mean output: [1.50086186 1.42920616 1.39831006 1.38961969 1.39941372 1.4443991
+ 1.54088434]
+scan scan109 mean output: [2.30197851 2.20360578 2.13959853 2.1302663  2.15524475 2.31695009
+ 2.64638124]
+scan scan111 mean output: [3.53442634 3.37920633 3.31997709 3.28886725 3.31675281 3.38871323
+ 3.67240878]
+scan scan112 mean output: [5.59327961 5.28310663 5.14031178 5.14182902 5.1483838  5.27757189
+ 5.69128932]
+scan scan113 mean output: [5.65039545 5.24060912 5.12833628 5.10867552 5.09432419 5.23226616
+ 5.79506215]
+scan scan115 mean output: [1.10287945 1.05027054 1.00521698 1.00482054 1.01658114 1.06764755
+ 1.16337927]
+scan scan116 mean output: [1.26797312 1.20659617 1.16379642 1.14963802 1.16327593 1.16962385
+ 1.19768231]
+scan scan119 mean output: [2.96742071 2.68487256 2.58232683 2.5617083  2.58739374 2.68868351
+ 2.96048615]
+scan scan120 mean output: [1.62734547 1.45432689 1.36843849 1.3507711  1.34210405 1.37754391
+ 1.58746313]
+scan scan121 mean output: [2.45077215 2.2816408  2.19525332 2.18318168 2.20049704 2.27198017
+ 2.69546309]
+scan scan122 mean output: [1.73261188 1.5833986  1.51542548 1.49187345 1.49378712 1.53200495
+ 1.73979831]
+scan scan123 mean output: [1.42056491 1.26430274 1.21997888 1.23058494 1.21519014 1.27313657
+ 1.45864995]
+scan scan124 mean output: [1.50513161 1.40515696 1.3793114  1.36679706 1.37046543 1.43902769
+ 1.61628655]
+scan scan125 mean output: [1.84503571 1.68809586 1.65205791 1.62550835 1.64884693 1.7013044
+ 1.82643247]
+04/01/2024 03:00:46 - INFO - __main__ - ***** Running training *****
+04/01/2024 03:00:46 - INFO - __main__ -   Num examples = 27097
+04/01/2024 03:00:46 - INFO - __main__ -   Num Epochs = 50
+04/01/2024 03:00:46 - INFO - __main__ -   Instantaneous batch size per device = 4
+04/01/2024 03:00:46 - INFO - __main__ -   Total train batch size (w. parallel, distributed & accumulation) = 4
+04/01/2024 03:00:46 - INFO - __main__ -   Gradient Accumulation steps = 1
+04/01/2024 03:00:46 - INFO - __main__ -   Total optimization steps = 338750
+04/01/2024 03:00:46 - INFO - accelerate.accelerator - Saving current state to /root/autodl-tmp/ViewDiff/output_stable-diffusion-2-1-base/all/subset_all/input_3/train/class6/checkpoint-0
+Configuration saved in /root/autodl-tmp/ViewDiff/output_stable-diffusion-2-1-base/all/subset_all/input_3/train/class6/checkpoint-0/unet/config.json
+Model weights saved in /root/autodl-tmp/ViewDiff/output_stable-diffusion-2-1-base/all/subset_all/input_3/train/class6/checkpoint-0/unet/diffusion_pytorch_model.safetensors
+Model weights saved in /root/autodl-tmp/ViewDiff/output_stable-diffusion-2-1-base/all/subset_all/input_3/train/class6/checkpoint-0/unet/pytorch_lora_weights.safetensors
+04/01/2024 03:01:05 - INFO - accelerate.checkpointing - Optimizer state saved in /root/autodl-tmp/ViewDiff/output_stable-diffusion-2-1-base/all/subset_all/input_3/train/class6/checkpoint-0/optimizer.bin
+04/01/2024 03:01:05 - INFO - accelerate.checkpointing - Scheduler state saved in /root/autodl-tmp/ViewDiff/output_stable-diffusion-2-1-base/all/subset_all/input_3/train/class6/checkpoint-0/scheduler.bin
+04/01/2024 03:01:05 - INFO - accelerate.checkpointing - Random states saved in /root/autodl-tmp/ViewDiff/output_stable-diffusion-2-1-base/all/subset_all/input_3/train/class6/checkpoint-0/random_states_0.pkl
+04/01/2024 03:01:05 - INFO - __main__ - Saved state to /root/autodl-tmp/ViewDiff/output_stable-diffusion-2-1-base/all/subset_all/input_3/train/class6/checkpoint-0
+04/01/2024 03:01:05 - INFO - accelerate.accelerator - Loading states from /root/autodl-tmp/ViewDiff/output_stable-diffusion-2-1-base/all/subset_all/input_3/train/class6/checkpoint-9500/
+Some weights of the model checkpoint were not used when initializing UNet2DConditionCrossFrameInExistingAttnModel: 
+ ['down_blocks.0.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.0.bias, down_blocks.0.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.0.weight, down_blocks.0.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.2.bias, down_blocks.0.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.2.weight, down_blocks.0.attentions.0.transformer_blocks.0.attn1.processor.to_k_lora.down.weight, down_blocks.0.attentions.0.transformer_blocks.0.attn1.processor.to_k_lora.up.weight, down_blocks.0.attentions.0.transformer_blocks.0.attn1.processor.to_out_lora.down.weight, down_blocks.0.attentions.0.transformer_blocks.0.attn1.processor.to_out_lora.up.weight, down_blocks.0.attentions.0.transformer_blocks.0.attn1.processor.to_q_lora.down.weight, down_blocks.0.attentions.0.transformer_blocks.0.attn1.processor.to_q_lora.up.weight, down_blocks.0.attentions.0.transformer_blocks.0.attn1.processor.to_v_lora.down.weight, down_blocks.0.attentions.0.transformer_blocks.0.attn1.processor.to_v_lora.up.weight, down_blocks.0.attentions.0.transformer_blocks.0.attn2.processor.to_k_lora.down.weight, down_blocks.0.attentions.0.transformer_blocks.0.attn2.processor.to_k_lora.up.weight, down_blocks.0.attentions.0.transformer_blocks.0.attn2.processor.to_out_lora.down.weight, down_blocks.0.attentions.0.transformer_blocks.0.attn2.processor.to_out_lora.up.weight, down_blocks.0.attentions.0.transformer_blocks.0.attn2.processor.to_q_lora.down.weight, down_blocks.0.attentions.0.transformer_blocks.0.attn2.processor.to_q_lora.up.weight, down_blocks.0.attentions.0.transformer_blocks.0.attn2.processor.to_v_lora.down.weight, down_blocks.0.attentions.0.transformer_blocks.0.attn2.processor.to_v_lora.up.weight, down_blocks.0.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.0.bias, down_blocks.0.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.0.weight, down_blocks.0.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.2.bias, down_blocks.0.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.2.weight, down_blocks.0.attentions.1.transformer_blocks.0.attn1.processor.to_k_lora.down.weight, down_blocks.0.attentions.1.transformer_blocks.0.attn1.processor.to_k_lora.up.weight, down_blocks.0.attentions.1.transformer_blocks.0.attn1.processor.to_out_lora.down.weight, down_blocks.0.attentions.1.transformer_blocks.0.attn1.processor.to_out_lora.up.weight, down_blocks.0.attentions.1.transformer_blocks.0.attn1.processor.to_q_lora.down.weight, down_blocks.0.attentions.1.transformer_blocks.0.attn1.processor.to_q_lora.up.weight, down_blocks.0.attentions.1.transformer_blocks.0.attn1.processor.to_v_lora.down.weight, down_blocks.0.attentions.1.transformer_blocks.0.attn1.processor.to_v_lora.up.weight, down_blocks.0.attentions.1.transformer_blocks.0.attn2.processor.to_k_lora.down.weight, down_blocks.0.attentions.1.transformer_blocks.0.attn2.processor.to_k_lora.up.weight, down_blocks.0.attentions.1.transformer_blocks.0.attn2.processor.to_out_lora.down.weight, down_blocks.0.attentions.1.transformer_blocks.0.attn2.processor.to_out_lora.up.weight, down_blocks.0.attentions.1.transformer_blocks.0.attn2.processor.to_q_lora.down.weight, down_blocks.0.attentions.1.transformer_blocks.0.attn2.processor.to_q_lora.up.weight, down_blocks.0.attentions.1.transformer_blocks.0.attn2.processor.to_v_lora.down.weight, down_blocks.0.attentions.1.transformer_blocks.0.attn2.processor.to_v_lora.up.weight, down_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.0.bias, down_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.0.weight, down_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.2.bias, down_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.2.weight, down_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.to_k_lora.down.weight, down_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.to_k_lora.up.weight, down_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.to_out_lora.down.weight, down_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.to_out_lora.up.weight, down_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.to_q_lora.down.weight, down_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.to_q_lora.up.weight, down_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.to_v_lora.down.weight, down_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.to_v_lora.up.weight, down_blocks.1.attentions.0.transformer_blocks.0.attn2.processor.to_k_lora.down.weight, down_blocks.1.attentions.0.transformer_blocks.0.attn2.processor.to_k_lora.up.weight, down_blocks.1.attentions.0.transformer_blocks.0.attn2.processor.to_out_lora.down.weight, down_blocks.1.attentions.0.transformer_blocks.0.attn2.processor.to_out_lora.up.weight, down_blocks.1.attentions.0.transformer_blocks.0.attn2.processor.to_q_lora.down.weight, down_blocks.1.attentions.0.transformer_blocks.0.attn2.processor.to_q_lora.up.weight, down_blocks.1.attentions.0.transformer_blocks.0.attn2.processor.to_v_lora.down.weight, down_blocks.1.attentions.0.transformer_blocks.0.attn2.processor.to_v_lora.up.weight, down_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.0.bias, down_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.0.weight, down_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.2.bias, down_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.2.weight, down_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.to_k_lora.down.weight, down_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.to_k_lora.up.weight, down_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.to_out_lora.down.weight, down_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.to_out_lora.up.weight, down_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.to_q_lora.down.weight, down_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.to_q_lora.up.weight, down_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.to_v_lora.down.weight, down_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.to_v_lora.up.weight, down_blocks.1.attentions.1.transformer_blocks.0.attn2.processor.to_k_lora.down.weight, down_blocks.1.attentions.1.transformer_blocks.0.attn2.processor.to_k_lora.up.weight, down_blocks.1.attentions.1.transformer_blocks.0.attn2.processor.to_out_lora.down.weight, down_blocks.1.attentions.1.transformer_blocks.0.attn2.processor.to_out_lora.up.weight, down_blocks.1.attentions.1.transformer_blocks.0.attn2.processor.to_q_lora.down.weight, down_blocks.1.attentions.1.transformer_blocks.0.attn2.processor.to_q_lora.up.weight, down_blocks.1.attentions.1.transformer_blocks.0.attn2.processor.to_v_lora.down.weight, down_blocks.1.attentions.1.transformer_blocks.0.attn2.processor.to_v_lora.up.weight, down_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.0.bias, down_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.0.weight, down_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.2.bias, down_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.2.weight, down_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.to_k_lora.down.weight, down_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.to_k_lora.up.weight, down_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.to_out_lora.down.weight, down_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.to_out_lora.up.weight, down_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.to_q_lora.down.weight, down_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.to_q_lora.up.weight, down_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.to_v_lora.down.weight, down_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.to_v_lora.up.weight, down_blocks.2.attentions.0.transformer_blocks.0.attn2.processor.to_k_lora.down.weight, down_blocks.2.attentions.0.transformer_blocks.0.attn2.processor.to_k_lora.up.weight, down_blocks.2.attentions.0.transformer_blocks.0.attn2.processor.to_out_lora.down.weight, down_blocks.2.attentions.0.transformer_blocks.0.attn2.processor.to_out_lora.up.weight, down_blocks.2.attentions.0.transformer_blocks.0.attn2.processor.to_q_lora.down.weight, down_blocks.2.attentions.0.transformer_blocks.0.attn2.processor.to_q_lora.up.weight, down_blocks.2.attentions.0.transformer_blocks.0.attn2.processor.to_v_lora.down.weight, down_blocks.2.attentions.0.transformer_blocks.0.attn2.processor.to_v_lora.up.weight, down_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.0.bias, down_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.0.weight, down_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.2.bias, down_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.2.weight, down_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.to_k_lora.down.weight, down_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.to_k_lora.up.weight, down_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.to_out_lora.down.weight, down_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.to_out_lora.up.weight, down_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.to_q_lora.down.weight, down_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.to_q_lora.up.weight, down_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.to_v_lora.down.weight, down_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.to_v_lora.up.weight, down_blocks.2.attentions.1.transformer_blocks.0.attn2.processor.to_k_lora.down.weight, down_blocks.2.attentions.1.transformer_blocks.0.attn2.processor.to_k_lora.up.weight, down_blocks.2.attentions.1.transformer_blocks.0.attn2.processor.to_out_lora.down.weight, down_blocks.2.attentions.1.transformer_blocks.0.attn2.processor.to_out_lora.up.weight, down_blocks.2.attentions.1.transformer_blocks.0.attn2.processor.to_q_lora.down.weight, down_blocks.2.attentions.1.transformer_blocks.0.attn2.processor.to_q_lora.up.weight, down_blocks.2.attentions.1.transformer_blocks.0.attn2.processor.to_v_lora.down.weight, down_blocks.2.attentions.1.transformer_blocks.0.attn2.processor.to_v_lora.up.weight, mid_block.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.0.bias, mid_block.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.0.weight, mid_block.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.2.bias, mid_block.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.2.weight, mid_block.attentions.0.transformer_blocks.0.attn1.processor.to_k_lora.down.weight, mid_block.attentions.0.transformer_blocks.0.attn1.processor.to_k_lora.up.weight, mid_block.attentions.0.transformer_blocks.0.attn1.processor.to_out_lora.down.weight, mid_block.attentions.0.transformer_blocks.0.attn1.processor.to_out_lora.up.weight, mid_block.attentions.0.transformer_blocks.0.attn1.processor.to_q_lora.down.weight, mid_block.attentions.0.transformer_blocks.0.attn1.processor.to_q_lora.up.weight, mid_block.attentions.0.transformer_blocks.0.attn1.processor.to_v_lora.down.weight, mid_block.attentions.0.transformer_blocks.0.attn1.processor.to_v_lora.up.weight, mid_block.attentions.0.transformer_blocks.0.attn2.processor.to_k_lora.down.weight, mid_block.attentions.0.transformer_blocks.0.attn2.processor.to_k_lora.up.weight, mid_block.attentions.0.transformer_blocks.0.attn2.processor.to_out_lora.down.weight, mid_block.attentions.0.transformer_blocks.0.attn2.processor.to_out_lora.up.weight, mid_block.attentions.0.transformer_blocks.0.attn2.processor.to_q_lora.down.weight, mid_block.attentions.0.transformer_blocks.0.attn2.processor.to_q_lora.up.weight, mid_block.attentions.0.transformer_blocks.0.attn2.processor.to_v_lora.down.weight, mid_block.attentions.0.transformer_blocks.0.attn2.processor.to_v_lora.up.weight, up_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.0.bias, up_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.0.weight, up_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.2.bias, up_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.2.weight, up_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.to_k_lora.down.weight, up_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.to_k_lora.up.weight, up_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.to_out_lora.down.weight, up_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.to_out_lora.up.weight, up_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.to_q_lora.down.weight, up_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.to_q_lora.up.weight, up_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.to_v_lora.down.weight, up_blocks.1.attentions.0.transformer_blocks.0.attn1.processor.to_v_lora.up.weight, up_blocks.1.attentions.0.transformer_blocks.0.attn2.processor.to_k_lora.down.weight, up_blocks.1.attentions.0.transformer_blocks.0.attn2.processor.to_k_lora.up.weight, up_blocks.1.attentions.0.transformer_blocks.0.attn2.processor.to_out_lora.down.weight, up_blocks.1.attentions.0.transformer_blocks.0.attn2.processor.to_out_lora.up.weight, up_blocks.1.attentions.0.transformer_blocks.0.attn2.processor.to_q_lora.down.weight, up_blocks.1.attentions.0.transformer_blocks.0.attn2.processor.to_q_lora.up.weight, up_blocks.1.attentions.0.transformer_blocks.0.attn2.processor.to_v_lora.down.weight, up_blocks.1.attentions.0.transformer_blocks.0.attn2.processor.to_v_lora.up.weight, up_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.0.bias, up_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.0.weight, up_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.2.bias, up_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.2.weight, up_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.to_k_lora.down.weight, up_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.to_k_lora.up.weight, up_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.to_out_lora.down.weight, up_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.to_out_lora.up.weight, up_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.to_q_lora.down.weight, up_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.to_q_lora.up.weight, up_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.to_v_lora.down.weight, up_blocks.1.attentions.1.transformer_blocks.0.attn1.processor.to_v_lora.up.weight, up_blocks.1.attentions.1.transformer_blocks.0.attn2.processor.to_k_lora.down.weight, up_blocks.1.attentions.1.transformer_blocks.0.attn2.processor.to_k_lora.up.weight, up_blocks.1.attentions.1.transformer_blocks.0.attn2.processor.to_out_lora.down.weight, up_blocks.1.attentions.1.transformer_blocks.0.attn2.processor.to_out_lora.up.weight, up_blocks.1.attentions.1.transformer_blocks.0.attn2.processor.to_q_lora.down.weight, up_blocks.1.attentions.1.transformer_blocks.0.attn2.processor.to_q_lora.up.weight, up_blocks.1.attentions.1.transformer_blocks.0.attn2.processor.to_v_lora.down.weight, up_blocks.1.attentions.1.transformer_blocks.0.attn2.processor.to_v_lora.up.weight, up_blocks.1.attentions.2.transformer_blocks.0.attn1.processor.temb_proj.0.bias, up_blocks.1.attentions.2.transformer_blocks.0.attn1.processor.temb_proj.0.weight, up_blocks.1.attentions.2.transformer_blocks.0.attn1.processor.temb_proj.2.bias, up_blocks.1.attentions.2.transformer_blocks.0.attn1.processor.temb_proj.2.weight, up_blocks.1.attentions.2.transformer_blocks.0.attn1.processor.to_k_lora.down.weight, up_blocks.1.attentions.2.transformer_blocks.0.attn1.processor.to_k_lora.up.weight, up_blocks.1.attentions.2.transformer_blocks.0.attn1.processor.to_out_lora.down.weight, up_blocks.1.attentions.2.transformer_blocks.0.attn1.processor.to_out_lora.up.weight, up_blocks.1.attentions.2.transformer_blocks.0.attn1.processor.to_q_lora.down.weight, up_blocks.1.attentions.2.transformer_blocks.0.attn1.processor.to_q_lora.up.weight, up_blocks.1.attentions.2.transformer_blocks.0.attn1.processor.to_v_lora.down.weight, up_blocks.1.attentions.2.transformer_blocks.0.attn1.processor.to_v_lora.up.weight, up_blocks.1.attentions.2.transformer_blocks.0.attn2.processor.to_k_lora.down.weight, up_blocks.1.attentions.2.transformer_blocks.0.attn2.processor.to_k_lora.up.weight, up_blocks.1.attentions.2.transformer_blocks.0.attn2.processor.to_out_lora.down.weight, up_blocks.1.attentions.2.transformer_blocks.0.attn2.processor.to_out_lora.up.weight, up_blocks.1.attentions.2.transformer_blocks.0.attn2.processor.to_q_lora.down.weight, up_blocks.1.attentions.2.transformer_blocks.0.attn2.processor.to_q_lora.up.weight, up_blocks.1.attentions.2.transformer_blocks.0.attn2.processor.to_v_lora.down.weight, up_blocks.1.attentions.2.transformer_blocks.0.attn2.processor.to_v_lora.up.weight, up_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.0.bias, up_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.0.weight, up_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.2.bias, up_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.2.weight, up_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.to_k_lora.down.weight, up_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.to_k_lora.up.weight, up_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.to_out_lora.down.weight, up_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.to_out_lora.up.weight, up_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.to_q_lora.down.weight, up_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.to_q_lora.up.weight, up_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.to_v_lora.down.weight, up_blocks.2.attentions.0.transformer_blocks.0.attn1.processor.to_v_lora.up.weight, up_blocks.2.attentions.0.transformer_blocks.0.attn2.processor.to_k_lora.down.weight, up_blocks.2.attentions.0.transformer_blocks.0.attn2.processor.to_k_lora.up.weight, up_blocks.2.attentions.0.transformer_blocks.0.attn2.processor.to_out_lora.down.weight, up_blocks.2.attentions.0.transformer_blocks.0.attn2.processor.to_out_lora.up.weight, up_blocks.2.attentions.0.transformer_blocks.0.attn2.processor.to_q_lora.down.weight, up_blocks.2.attentions.0.transformer_blocks.0.attn2.processor.to_q_lora.up.weight, up_blocks.2.attentions.0.transformer_blocks.0.attn2.processor.to_v_lora.down.weight, up_blocks.2.attentions.0.transformer_blocks.0.attn2.processor.to_v_lora.up.weight, up_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.0.bias, up_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.0.weight, up_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.2.bias, up_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.2.weight, up_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.to_k_lora.down.weight, up_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.to_k_lora.up.weight, up_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.to_out_lora.down.weight, up_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.to_out_lora.up.weight, up_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.to_q_lora.down.weight, up_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.to_q_lora.up.weight, up_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.to_v_lora.down.weight, up_blocks.2.attentions.1.transformer_blocks.0.attn1.processor.to_v_lora.up.weight, up_blocks.2.attentions.1.transformer_blocks.0.attn2.processor.to_k_lora.down.weight, up_blocks.2.attentions.1.transformer_blocks.0.attn2.processor.to_k_lora.up.weight, up_blocks.2.attentions.1.transformer_blocks.0.attn2.processor.to_out_lora.down.weight, up_blocks.2.attentions.1.transformer_blocks.0.attn2.processor.to_out_lora.up.weight, up_blocks.2.attentions.1.transformer_blocks.0.attn2.processor.to_q_lora.down.weight, up_blocks.2.attentions.1.transformer_blocks.0.attn2.processor.to_q_lora.up.weight, up_blocks.2.attentions.1.transformer_blocks.0.attn2.processor.to_v_lora.down.weight, up_blocks.2.attentions.1.transformer_blocks.0.attn2.processor.to_v_lora.up.weight, up_blocks.2.attentions.2.transformer_blocks.0.attn1.processor.temb_proj.0.bias, up_blocks.2.attentions.2.transformer_blocks.0.attn1.processor.temb_proj.0.weight, up_blocks.2.attentions.2.transformer_blocks.0.attn1.processor.temb_proj.2.bias, up_blocks.2.attentions.2.transformer_blocks.0.attn1.processor.temb_proj.2.weight, up_blocks.2.attentions.2.transformer_blocks.0.attn1.processor.to_k_lora.down.weight, up_blocks.2.attentions.2.transformer_blocks.0.attn1.processor.to_k_lora.up.weight, up_blocks.2.attentions.2.transformer_blocks.0.attn1.processor.to_out_lora.down.weight, up_blocks.2.attentions.2.transformer_blocks.0.attn1.processor.to_out_lora.up.weight, up_blocks.2.attentions.2.transformer_blocks.0.attn1.processor.to_q_lora.down.weight, up_blocks.2.attentions.2.transformer_blocks.0.attn1.processor.to_q_lora.up.weight, up_blocks.2.attentions.2.transformer_blocks.0.attn1.processor.to_v_lora.down.weight, up_blocks.2.attentions.2.transformer_blocks.0.attn1.processor.to_v_lora.up.weight, up_blocks.2.attentions.2.transformer_blocks.0.attn2.processor.to_k_lora.down.weight, up_blocks.2.attentions.2.transformer_blocks.0.attn2.processor.to_k_lora.up.weight, up_blocks.2.attentions.2.transformer_blocks.0.attn2.processor.to_out_lora.down.weight, up_blocks.2.attentions.2.transformer_blocks.0.attn2.processor.to_out_lora.up.weight, up_blocks.2.attentions.2.transformer_blocks.0.attn2.processor.to_q_lora.down.weight, up_blocks.2.attentions.2.transformer_blocks.0.attn2.processor.to_q_lora.up.weight, up_blocks.2.attentions.2.transformer_blocks.0.attn2.processor.to_v_lora.down.weight, up_blocks.2.attentions.2.transformer_blocks.0.attn2.processor.to_v_lora.up.weight, up_blocks.3.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.0.bias, up_blocks.3.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.0.weight, up_blocks.3.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.2.bias, up_blocks.3.attentions.0.transformer_blocks.0.attn1.processor.temb_proj.2.weight, up_blocks.3.attentions.0.transformer_blocks.0.attn1.processor.to_k_lora.down.weight, up_blocks.3.attentions.0.transformer_blocks.0.attn1.processor.to_k_lora.up.weight, up_blocks.3.attentions.0.transformer_blocks.0.attn1.processor.to_out_lora.down.weight, up_blocks.3.attentions.0.transformer_blocks.0.attn1.processor.to_out_lora.up.weight, up_blocks.3.attentions.0.transformer_blocks.0.attn1.processor.to_q_lora.down.weight, up_blocks.3.attentions.0.transformer_blocks.0.attn1.processor.to_q_lora.up.weight, up_blocks.3.attentions.0.transformer_blocks.0.attn1.processor.to_v_lora.down.weight, up_blocks.3.attentions.0.transformer_blocks.0.attn1.processor.to_v_lora.up.weight, up_blocks.3.attentions.0.transformer_blocks.0.attn2.processor.to_k_lora.down.weight, up_blocks.3.attentions.0.transformer_blocks.0.attn2.processor.to_k_lora.up.weight, up_blocks.3.attentions.0.transformer_blocks.0.attn2.processor.to_out_lora.down.weight, up_blocks.3.attentions.0.transformer_blocks.0.attn2.processor.to_out_lora.up.weight, up_blocks.3.attentions.0.transformer_blocks.0.attn2.processor.to_q_lora.down.weight, up_blocks.3.attentions.0.transformer_blocks.0.attn2.processor.to_q_lora.up.weight, up_blocks.3.attentions.0.transformer_blocks.0.attn2.processor.to_v_lora.down.weight, up_blocks.3.attentions.0.transformer_blocks.0.attn2.processor.to_v_lora.up.weight, up_blocks.3.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.0.bias, up_blocks.3.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.0.weight, up_blocks.3.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.2.bias, up_blocks.3.attentions.1.transformer_blocks.0.attn1.processor.temb_proj.2.weight, up_blocks.3.attentions.1.transformer_blocks.0.attn1.processor.to_k_lora.down.weight, up_blocks.3.attentions.1.transformer_blocks.0.attn1.processor.to_k_lora.up.weight, up_blocks.3.attentions.1.transformer_blocks.0.attn1.processor.to_out_lora.down.weight, up_blocks.3.attentions.1.transformer_blocks.0.attn1.processor.to_out_lora.up.weight, up_blocks.3.attentions.1.transformer_blocks.0.attn1.processor.to_q_lora.down.weight, up_blocks.3.attentions.1.transformer_blocks.0.attn1.processor.to_q_lora.up.weight, up_blocks.3.attentions.1.transformer_blocks.0.attn1.processor.to_v_lora.down.weight, up_blocks.3.attentions.1.transformer_blocks.0.attn1.processor.to_v_lora.up.weight, up_blocks.3.attentions.1.transformer_blocks.0.attn2.processor.to_k_lora.down.weight, up_blocks.3.attentions.1.transformer_blocks.0.attn2.processor.to_k_lora.up.weight, up_blocks.3.attentions.1.transformer_blocks.0.attn2.processor.to_out_lora.down.weight, up_blocks.3.attentions.1.transformer_blocks.0.attn2.processor.to_out_lora.up.weight, up_blocks.3.attentions.1.transformer_blocks.0.attn2.processor.to_q_lora.down.weight, up_blocks.3.attentions.1.transformer_blocks.0.attn2.processor.to_q_lora.up.weight, up_blocks.3.attentions.1.transformer_blocks.0.attn2.processor.to_v_lora.down.weight, up_blocks.3.attentions.1.transformer_blocks.0.attn2.processor.to_v_lora.up.weight, up_blocks.3.attentions.2.transformer_blocks.0.attn1.processor.temb_proj.0.bias, up_blocks.3.attentions.2.transformer_blocks.0.attn1.processor.temb_proj.0.weight, up_blocks.3.attentions.2.transformer_blocks.0.attn1.processor.temb_proj.2.bias, up_blocks.3.attentions.2.transformer_blocks.0.attn1.processor.temb_proj.2.weight, up_blocks.3.attentions.2.transformer_blocks.0.attn1.processor.to_k_lora.down.weight, up_blocks.3.attentions.2.transformer_blocks.0.attn1.processor.to_k_lora.up.weight, up_blocks.3.attentions.2.transformer_blocks.0.attn1.processor.to_out_lora.down.weight, up_blocks.3.attentions.2.transformer_blocks.0.attn1.processor.to_out_lora.up.weight, up_blocks.3.attentions.2.transformer_blocks.0.attn1.processor.to_q_lora.down.weight, up_blocks.3.attentions.2.transformer_blocks.0.attn1.processor.to_q_lora.up.weight, up_blocks.3.attentions.2.transformer_blocks.0.attn1.processor.to_v_lora.down.weight, up_blocks.3.attentions.2.transformer_blocks.0.attn1.processor.to_v_lora.up.weight, up_blocks.3.attentions.2.transformer_blocks.0.attn2.processor.to_k_lora.down.weight, up_blocks.3.attentions.2.transformer_blocks.0.attn2.processor.to_k_lora.up.weight, up_blocks.3.attentions.2.transformer_blocks.0.attn2.processor.to_out_lora.down.weight, up_blocks.3.attentions.2.transformer_blocks.0.attn2.processor.to_out_lora.up.weight, up_blocks.3.attentions.2.transformer_blocks.0.attn2.processor.to_q_lora.down.weight, up_blocks.3.attentions.2.transformer_blocks.0.attn2.processor.to_q_lora.up.weight, up_blocks.3.attentions.2.transformer_blocks.0.attn2.processor.to_v_lora.down.weight, up_blocks.3.attentions.2.transformer_blocks.0.attn2.processor.to_v_lora.up.weight']
+04/01/2024 03:01:09 - INFO - __main__ - Loaded lora parameters into model
+04/01/2024 03:01:09 - INFO - accelerate.checkpointing - All model weights loaded successfully
+04/01/2024 03:01:19 - INFO - accelerate.checkpointing - All optimizer states loaded successfully
+04/01/2024 03:01:19 - INFO - accelerate.checkpointing - All scheduler states loaded successfully
+04/01/2024 03:01:19 - INFO - accelerate.checkpointing - All random states loaded successfully
+04/01/2024 03:01:19 - INFO - accelerate.accelerator - Loading in 0 custom states
+scan scan126 mean output: [1.97154763 1.61379367 1.60398592 1.57126795 1.57520988 1.70586573
+ 2.406283  ]
+scan scan127 mean output: [2.47762656 2.09939229 2.21543788 2.23824336 2.264222   2.22630964
+ 2.38829782]
+scan scan128 mean output: [3.36696636 2.89962806 2.82768071 2.79384071 2.75277496 2.82201681
+ 3.07775393]
+scan scan3 mean output: [3.05263341 2.92222905 2.79727794 2.86347311 2.84872966 2.86011306
+ 2.89029897]
+scan scan5 mean output: [1.27925969 1.21662743 1.19024779 1.17714057 1.17585228 1.13693983
+ 1.13944231]
+scan scan17 mean output: [4.23918102 4.3646479  4.26873698 4.152941   4.16164234 4.44407791
+ 4.15546879]
+scan scan21 mean output: [6.7044504  6.78296111 6.79752936 6.78882487 6.74292021 6.64370545
+ 6.71224226]
+scan scan28 mean output: [8.33500304 8.26974845 8.08564879 7.80853114 7.63656337 7.53135754
+ 7.33638762]
+scan scan35 mean output: [1.18667069 1.32775589 1.20760566 1.06743625 1.15983699 0.91010288
+ 0.87788923]
+scan scan37 mean output: [21.1885944  21.17826699 21.25191359 21.18731575 20.97766127 20.14655309
+ 19.91200681]
+scan scan38 mean output: [1.69360119 1.60652492 1.57134287 1.54112932 1.56236016 1.63116413
+ 1.62020702]
+scan scan40 mean output: [3.64535844 3.69948315 3.71793726 3.69029421 3.68635351 3.71370282
+ 3.58273512]
+scan scan43 mean output: [2.2589177  2.24700747 2.22983368 2.24613731 2.19530878 2.33009434
+ 2.42131581]
+scan scan56 mean output: [2.31583979 2.17296925 2.15377764 2.14338661 2.1395326  2.20913124
+ 2.29832114]
+scan scan59 mean output: [2.25470706 2.34287849 2.48965601 2.58392481 2.6572768  2.5697732
+ 2.31332584]
+scan scan66 mean output: [1.92438559 2.08761549 1.80486628 1.61805749 1.56760059 1.44017948
+ 1.4255248 ]
+scan scan67 mean output: [3.06216342 3.51998134 3.27188233 3.01847513 3.0300974  3.01376892
+ 2.77910937]
+scan scan82 mean output: [8.87980272 9.1904472  9.19312354 9.1552566  9.26186729 9.03365678
+ 7.82553422]
+scan scan86 mean output: [16.68869462 13.0623592  11.09205004 10.73961877 10.67555843 10.71248814
+ 11.94098382]
+scan scan106 mean output: [1.91600927 1.62643204 1.56631822 1.54953243 1.58691446 1.61378269
+ 1.72092495]
+scan scan117 mean output: [1.6601294  1.54156241 1.50466732 1.4715858  1.46958674 1.49934888
+ 1.62797041]
+load from path: /root/autodl-tmp/ViewDiff/output_stable-diffusion-2-1-base/all/subset_all/input_3/train/class6/checkpoint-9500
+Resuming from checkpoint /root/autodl-tmp/ViewDiff/output_stable-diffusion-2-1-base/all/subset_all/input_3/train/class6/checkpoint-9500
+Traceback (most recent call last):
+  File "/root/autodl-tmp/ViewDiff/viewdiff/train_stabilityai.py", line 1048, in <module>
+    tyro.cli(train_and_test)
+  File "/root/autodl-tmp/instructpix2pix/lib/python3.8/site-packages/tyro/_cli.py", line 177, in cli
+    output = _cli_impl(
+  File "/root/autodl-tmp/instructpix2pix/lib/python3.8/site-packages/tyro/_cli.py", line 431, in _cli_impl
+    out, consumed_keywords = _calling.call_from_args(
+  File "/root/autodl-tmp/instructpix2pix/lib/python3.8/site-packages/tyro/_calling.py", line 217, in call_from_args
+    return unwrapped_f(*positional_args, **kwargs), consumed_keywords  # type: ignore
+  File "/root/autodl-tmp/ViewDiff/viewdiff/train_stabilityai.py", line 178, in train_and_test
+    global_step, first_epoch, resume_step = maybe_continue_training(
+  File "/root/autodl-tmp/ViewDiff/viewdiff/../viewdiff/train_util.py", line 831, in maybe_continue_training
+    assert (
+AssertionError: sanity loading should only happen at the beginning of a new training
+Traceback (most recent call last):
+  File "/root/miniconda3/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/root/miniconda3/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/root/autodl-tmp/instructpix2pix/lib/python3.8/site-packages/accelerate/commands/launch.py", line 996, in <module>
+    main()
+  File "/root/autodl-tmp/instructpix2pix/lib/python3.8/site-packages/accelerate/commands/launch.py", line 992, in main
+    launch_command(args)
+  File "/root/autodl-tmp/instructpix2pix/lib/python3.8/site-packages/accelerate/commands/launch.py", line 986, in launch_command
+    simple_launcher(args)
+  File "/root/autodl-tmp/instructpix2pix/lib/python3.8/site-packages/accelerate/commands/launch.py", line 628, in simple_launcher
+    raise subprocess.CalledProcessError(returncode=process.returncode, cmd=cmd)
+subprocess.CalledProcessError: Command '['/root/autodl-tmp/instructpix2pix/bin/python', '/root/autodl-tmp/ViewDiff/viewdiff/train_stabilityai.py', '--finetune-config.io.pretrained_model_name_or_path', 'stabilityai/stable-diffusion-2-1-base', '--finetune-config.io.output_dir', '/root/autodl-tmp/ViewDiff/output_stable-diffusion-2-1-base', '--finetune-config.io.experiment_name', 'class6', '--finetune-config.training.mixed_precision', 'bf16', '--finetune-config.training.dataloader_num_workers', '4', '--finetune-config.training.num_train_epochs', '50', '--finetune-config.training.train_batch_size', '4', '--finetune-config.training.dreambooth_prior_preservation_loss_weight', '-1', '--finetune_config.training.noise_prediction_type', 'epsilon', '--finetune_config.training.prob_images_not_noisy', '0.25', '--finetune_config.training.max_num_images_not_noisy', '2', '--finetune_config.training.validation_epochs', '1', '--finetune_config.training.dreambooth_prior_preservation_every_nth', '-1', '--finetune-config.optimizer.learning_rate', '1e-4', '--finetune-config.optimizer.vol_rend_learning_rate', '1e-3', '--finetune-config.optimizer.vol_rend_adam_weight_decay', '0.0', '--finetune-config.optimizer.gradient_accumulation_steps', '1', '--finetune-config.optimizer.max_grad_norm', '5e-3', '--finetune-config.cross_frame_attention.to_k_other_frames', '2', '--finetune-config.cross_frame_attention.random_others', '--finetune-config.cross_frame_attention.with_self_attention', '--finetune-config.cross_frame_attention.use_temb_cond', '--finetune-config.cross_frame_attention.mode', 'pretrained', '--finetune-config.cross_frame_attention.n_cfa_down_blocks', '1', '--finetune-config.cross_frame_attention.n_cfa_up_blocks', '1', '--finetune-config.cross_frame_attention.unproj_reproj_mode', 'with_unproj_cfa', '--finetune-config.cross_frame_attention.num_3d_layers', '1', '--finetune-config.cross_frame_attention.dim_3d_latent', '16', '--finetune-config.cross_frame_attention.dim_3d_grid', '32', '--finetune-config.cross_frame_attention.n_novel_images', '0', '--finetune-config.cross_frame_attention.vol_rend_proj_in_mode', 'multiple', '--finetune-config.cross_frame_attention.vol_rend_proj_out_mode', 'multiple', '--finetune-config.cross_frame_attention.vol_rend_aggregator_mode', 'ibrnet', '--finetune-config.cross_frame_attention.last_layer_mode', 'no_residual_connection', '--finetune_config.cross_frame_attention.vol_rend_model_background', '--finetune_config.cross_frame_attention.vol_rend_background_grid_percentage', '0.5', '--finetune-config.model.pose_cond_mode', 'sa-ca', '--finetune-config.model.pose_cond_coord_space', 'absolute', '--finetune-config.model.pose_cond_lora_rank', '64', '--finetune-config.model.n_input_images', '3', '--dataset-config.root-dir', '/root/autodl-tmp/mvs_training/dtu', '--dataset-config.threshold', '0.8', '--dataset-config.split', 'train', '--dataset-config.img_wh', '512', '--validation-dataset-config.root-dir', '/root/autodl-tmp/mvs_training/dtu', '--validation-dataset-config.split', 'val', '--validation-dataset-config.threshold', '0.8']' returned non-zero exit status 1.

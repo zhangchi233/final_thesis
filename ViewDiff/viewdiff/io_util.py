@@ -15,7 +15,12 @@ import torch
 from torch.nn.functional import interpolate
 
 from torchvision.utils import make_grid
+<<<<<<< HEAD
 
+=======
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), "."))
+>>>>>>> fbd031a87f6603ed55d85841825eca28e0fae798
 from data.co3d.co3d_dataset import CO3DConfig
 from data.dtu.dtu import DTUConfig
 from data.create_video_from_image_folder import main as create_video_from_image_folder

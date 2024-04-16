@@ -135,13 +135,13 @@ class DTUDataset(Dataset):
     def define_transforms(self):
         if self.split == 'train': # you can add augmentation here
             self.transform = T.Compose([T.ToTensor(),
-                                        T.Normalize(mean=[0.485, 0.456, 0.406], 
-                                                    std=[0.229, 0.224, 0.225]),
+                                        # T.Normalize(mean=[0.485, 0.456, 0.406], 
+                                        #             std=[0.229, 0.224, 0.225]),
                                        ])
         else:
             self.transform = T.Compose([T.ToTensor(),
-                                        T.Normalize(mean=[0.485, 0.456, 0.406], 
-                                                    std=[0.229, 0.224, 0.225]),
+                                        # T.Normalize(mean=[0.485, 0.456, 0.406], 
+                                        #             std=[0.229, 0.224, 0.225]),
                                        ])
         self.unpreprocess = T.Compose([
             T.Normalize(mean=[0, 0, 0], std=[1/0.229, 1/0.224, 1/0.225]),
@@ -199,6 +199,7 @@ class DTUDataset(Dataset):
         view_ids = [ref_view] + src_views[:self.n_views-1]
 
         imgs = []
+        imgs_gt = []
         cams = []
         proj_mats = [] # record proj mats between views
         for i, vid in enumerate(view_ids):
@@ -215,6 +216,9 @@ class DTUDataset(Dataset):
             img = Image.open(img_filename)
             if self.img_wh is not None:
                 img = img.resize(self.img_wh, Image.BILINEAR)
+            img_gt = img.copy()
+            img_gt = self.transform(img_gt)
+            
             if self.train_on_dark:
               
                 gamma = np.random.uniform(2, 5)
@@ -233,7 +237,7 @@ class DTUDataset(Dataset):
                 img = imgs_noisy
             
 
-       
+            imgs_gt += [img_gt]
             imgs += [img]
 
             proj_mat_ls, depth_min,cam = self.proj_mats[vid]
@@ -254,11 +258,13 @@ class DTUDataset(Dataset):
         cams = torch.tensor(cams)
         
         imgs = torch.stack(imgs) # (V, 3, H, W)
+        imgs_gt = torch.stack(imgs_gt)
         proj_mats = torch.stack(proj_mats)[:,:,:3] # (V-1, self.levels, 3, 4) from fine to coarse
         
         
         sample['cams'] = cams
         sample['imgs'] = imgs
+        sample["imgs_gt"] =  imgs_gt
         sample['proj_mats'] = proj_mats
         sample['depth_interval'] = torch.FloatTensor([self.depth_interval])
         sample['scan_vid'] = (scan, ref_view)

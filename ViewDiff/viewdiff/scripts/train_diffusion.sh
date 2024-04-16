@@ -10,7 +10,7 @@ python -m accelerate.commands.launch \
   --finetune-config.training.mixed_precision bf16 \
   --finetune-config.training.dataloader_num_workers 4 \
   --finetune-config.training.num_train_epochs 50 \
-  --finetune-config.training.train_batch_size 1 \
+  --finetune-config.training.train_batch_size 4 \
   --finetune-config.training.dreambooth_prior_preservation_loss_weight -1 \
   --finetune_config.training.noise_prediction_type epsilon \
   --finetune_config.training.prob_images_not_noisy 0.25 \

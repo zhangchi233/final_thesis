@@ -1286,7 +1286,7 @@ class UNet2DConditionCrossFrameInExistingAttnModel(ModelMixin, ConfigMixin):
         mid_block_additional_residual: Optional[torch.Tensor] = None,
         encoder_attention_mask: Optional[torch.Tensor] = None,
         return_dict: bool = True,
-        n_images_per_batch: int = 0,
+        n_images_per_batch: int = 3,
         n_known_images: int = 0,
     ) -> Union[UNet3DConsistencyOutput, Tuple]:
         r"""
@@ -1370,14 +1370,20 @@ class UNet2DConditionCrossFrameInExistingAttnModel(ModelMixin, ConfigMixin):
 
         # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
         timesteps = timesteps.expand(sample.shape[0])
-
-        if n_known_images > 0:
+        
+        
+        if n_known_images is not None:
             timesteps = timesteps.clone()
             timesteps = expand_batch(timesteps, n_images_per_batch)
-            timesteps[:, 0:n_known_images] = 0
+            timesteps[:,:n_known_images] = 0
             timesteps = collapse_batch(timesteps)
+<<<<<<< HEAD
             #print(f"set timestep 0 for n_known_images={n_known_images} -->", timesteps, timesteps.shape)
         #print(timesteps, timesteps.shape)
+=======
+            print(f"set timestep 0 for n_known_images={n_known_images} -->", timesteps, timesteps.shape)
+        
+>>>>>>> fbd031a87f6603ed55d85841825eca28e0fae798
         t_emb = self.time_proj(timesteps)
 
         # `Timesteps` does not contain any weights and will always return f32 tensors

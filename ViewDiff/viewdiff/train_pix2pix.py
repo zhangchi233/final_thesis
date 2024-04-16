@@ -17,11 +17,11 @@ from transformers import CLIPTextModel, CLIPTokenizer
 from diffusers import (
     AutoencoderKL,
     DDPMScheduler,
-    
+    DDIMScheduler,
     EulerAncestralDiscreteScheduler
 )
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), "."))
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from model.custom_unet_2d_condition import (
     UNet2DConditionCrossFrameInExistingAttnModel,
     get_down_block_types,
@@ -77,7 +77,11 @@ from torch.utils.tensorboard import SummaryWriter
 # define logger path
 logger_path = os.path.join(os.path.dirname(__file__), "..", "logs")
 # define tensorboard writer
+<<<<<<< HEAD
 writer = SummaryWriter("/openbayes/home/tf_dir")
+=======
+writer = SummaryWriter("/root/tf-logs")
+>>>>>>> fbd031a87f6603ed55d85841825eca28e0fae798
 
 
 
@@ -234,7 +238,11 @@ def train_and_test(
         )
         pipeline = pipeline.to(accelerator.device)
         pipeline.set_progress_bar_config(disable=False)
+<<<<<<< HEAD
         pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(pipeline.scheduler.config)
+=======
+        pipeline.scheduler = DDIMScheduler.from_config(pipeline.scheduler.config)
+>>>>>>> fbd031a87f6603ed55d85841825eca28e0fae798
         pipeline.scheduler.config.prediction_type = finetune_config.training.noise_prediction_type
         if (
             accelerator.is_main_process
@@ -544,11 +552,12 @@ def train_step(
         
         batch["prompt"] = collapse_prompt_to_batch_dim(batch["prompt"], finetune_config.model.n_input_images)
        
-
+        # _,trainable_index = batch["index"]
 
 
 
         prompts= []
+<<<<<<< HEAD
         
         for t in range(batch["images"].shape[0]):
             for prompt in batch["prompt"]:
@@ -557,6 +566,18 @@ def train_step(
        
        
       
+=======
+        for i in range(len(batch["prompt"][0])):
+            for prompt in batch["prompt"]:
+                prompts.append(prompt[i])
+        batch["prompt"] = prompts
+        
+        
+        
+        
+        
+
+>>>>>>> fbd031a87f6603ed55d85841825eca28e0fae798
         batch_size, pose = collapse_tensor_to_batch_dim(batch["pose"])
         
         _, K = collapse_tensor_to_batch_dim(batch["K"])
@@ -601,8 +622,8 @@ def train_step(
 
         # Sample a random timestep for each batch
         N = latents.shape[0]
-        f_min = 0.0  # 0.02
-        f_max = 1.0  # 0.98
+        f_min = 0.02
+        f_max = 0.98
         t_min = int(f_min * noise_scheduler.config.num_train_timesteps)
         t_max = int(f_max * noise_scheduler.config.num_train_timesteps)
         timesteps = torch.randint(t_min, t_max, (batch_size,), device=latents.device, dtype=torch.long)
@@ -677,6 +698,7 @@ def train_step(
             timesteps,
             encoder_hidden_states,
             cross_attention_kwargs=cross_attention_kwargs,
+            #n_known_images = trainable_index
         )
        
         unet_pred = output.unet_sample
@@ -691,11 +713,23 @@ def train_step(
             unet_pred_target[non_noisy_mask] = unet_pred[non_noisy_mask].detach().clone().to(unet_pred_target)
 
         # compute unet-pred-loss
-        small_mask = batch["masks"]["level_3"].unsqueeze(1)
-        small_mask = small_mask.repeat(finetune_config.model.n_input_images,4, 1, 1)
+        # try:
+        small_mask = batch["small_mask"]
         
-   
-        unet_pred_acc = F.mse_loss(unet_pred[small_mask].float(), unet_pred_target[small_mask].float(), reduction="none")
+        
+        batch_size, k = small_mask.shape[:2]
+        # change dtype of small_mask to bool
+        small_mask = small_mask.view(batch_size * k, *small_mask.shape[2:]).bool()
+       
+      
+
+        small_mask = small_mask.repeat(1,4, 1, 1)
+        
+
+        unet_pred_acc = F.mse_loss(unet_pred.float(), unet_pred_target.float(), reduction="none")
+
+        # except:
+        #     unet_pred_acc = F.mse_loss(unet_pred.float(), unet_pred_target.float(), reduction="none")
         loss = unet_pred_acc.mean()
         unet_pred_acc = unet_pred_acc.mean()
 
@@ -859,11 +893,20 @@ def test_step(
 
     batch["images"] = 2*batch["images"]-1
     batch["target_imgs"] = 2*batch["target_imgs"]-1
+
     # parse batch
     # collapse K dimension into batch dimension (no concatenation happening)
-    batch["prompt"] = [cap[0] for cap in batch["prompt"]]
-    prompt = collapse_prompt_to_batch_dim(batch["prompt"], model_config.n_input_images)
-   
+    
+    
+
+    batch["prompt"] = collapse_prompt_to_batch_dim(batch["prompt"], model_config.n_input_images)
+    prompts= []
+    for i in range(len(batch["prompt"][0])):
+        for prompt in batch["prompt"]:
+            prompts.append(prompt[i])
+    batch["prompt"] = prompts
+    prompt = prompts
+    print(prompt)
     
     _, pose = collapse_tensor_to_batch_dim(batch["pose"])
     _, K = collapse_tensor_to_batch_dim(batch["K"])
@@ -908,7 +951,7 @@ def test_step(
         cross_attention_kwargs["unproj_reproj_kwargs"]["deactivate_view_dependent_rendering"] = True
 
     # check classifier-free-guidance
-    if guidance_scale > 1:
+    if guidance_scale > 0:
         if "pose_cond" in cross_attention_kwargs:
             cross_attention_kwargs["pose_cond"] = torch.cat([cross_attention_kwargs["pose_cond"]] * 3)
         if "unproj_reproj_kwargs" in cross_attention_kwargs:
@@ -936,6 +979,7 @@ def test_step(
             decode_all_timesteps=True,
             num_inference_steps=num_inference_steps,
             n_images_per_batch=model_config.n_input_images,
+            
         )
 
         # re-create K dimension from batch dimension
