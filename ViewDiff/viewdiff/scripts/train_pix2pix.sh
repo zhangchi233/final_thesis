@@ -7,10 +7,11 @@ python -m accelerate.commands.launch \
   --finetune-config.io.pretrained_model_name_or_path timbrooks/instruct-pix2pix \
   --finetune-config.io.output_dir /openbayes/home/output_var_unproj_low_high \
   --finetune-config.io.experiment_name class6 \
+  --finetune-config.io.resume_from_checkpoint latest \
   --finetune-config.training.mixed_precision bf16 \
   --finetune-config.training.dataloader_num_workers 4 \
   --finetune-config.training.num_train_epochs 50 \
-  --finetune-config.training.train_batch_size 8 \
+  --finetune-config.training.train_batch_size 6 \
   --finetune-config.training.dreambooth_prior_preservation_loss_weight -1 \
   --finetune_config.training.noise_prediction_type epsilon \
   --finetune_config.training.prob_images_not_noisy 0.25 \
@@ -33,7 +34,7 @@ python -m accelerate.commands.launch \
   --finetune-config.cross_frame_attention.num_3d_layers 1 \
   --finetune-config.cross_frame_attention.dim_3d_latent 16 \
   --finetune-config.cross_frame_attention.dim_3d_grid 64 \
-  --finetune-config.cross_frame_attention.n_novel_images 1 \
+  --finetune-config.cross_frame_attention.n_novel_images 0 \
   --finetune-config.cross_frame_attention.vol_rend_proj_in_mode multiple \
   --finetune-config.cross_frame_attention.vol_rend_proj_out_mode multiple \
   --finetune-config.cross_frame_attention.vol_rend_aggregator_mode ibrnet \
@@ -53,4 +54,5 @@ python -m accelerate.commands.launch \
   --validation-dataset-config.root-dir /openbayes/input/input0/mvs_training/dtu \
   --validation-dataset-config.split val \
   --validation-dataset-config.threshold 0.8\
+  --validation-dataset-config.img_wh 512\
 

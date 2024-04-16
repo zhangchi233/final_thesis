@@ -9,10 +9,11 @@ from torchvision import transforms as T
 
 class DTUDataset(Dataset):
     def __init__(self, root_dir, split, n_views=3, levels=3, depth_interval=2.65,
-                 img_wh=(512,512)):
+                 img_wh=None,train_on_dark = True):
         """
         img_wh should be set to a tuple ex: (1152, 864) to enable test mode!
         """
+        self.train_on_dark = train_on_dark
         self.root_dir = root_dir
         self.split = split
         assert self.split in ['train', 'val', 'test'], \
@@ -30,7 +31,7 @@ class DTUDataset(Dataset):
 
     def build_metas(self):
         self.metas = []
-        with open(f'/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}.txt') as f:
+        with open(f'/openbayes/input/input0/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}.txt') as f:
             self.scans = [line.rstrip() for line in f.readlines()]
 
         # light conditions 0-6 for training
@@ -206,15 +207,33 @@ class DTUDataset(Dataset):
             img_filename = os.path.join(self.root_dir,
                             f'Rectified/{scan}_train/rect_{vid+1:03d}_{light_idx}_r5000.png')
             mask_filename = os.path.join(self.root_dir,
-                            f'Depths/{scan}_train/depth_visual_{vid:04d}.png')
+                            f'Depths/{scan}/depth_visual_{vid:04d}.png')
             depth_filename = os.path.join(self.root_dir,
-                            f'Depths/{scan}_train/depth_map_{vid:04d}.pfm')
+                            f'Depths/{scan}/depth_map_{vid:04d}.pfm')
         
 
             img = Image.open(img_filename)
             if self.img_wh is not None:
                 img = img.resize(self.img_wh, Image.BILINEAR)
+            if self.train_on_dark:
+              
+                gamma = np.random.uniform(2, 5)
+                img = T.functional.adjust_gamma(img, gamma)
+                sigmoidB = np.random.uniform(0, 1)
+                sigmoid = np.sqrt(sigmoidB*(25/255)**2)
+
+                
+                
+                
             img = self.transform(img)
+            if self.train_on_dark:
+                gaussian_noise = torch.normal(img, sigmoid,)
+                imgs_noisy = img + gaussian_noise
+            
+                img = imgs_noisy
+            
+
+       
             imgs += [img]
 
             proj_mat_ls, depth_min,cam = self.proj_mats[vid]

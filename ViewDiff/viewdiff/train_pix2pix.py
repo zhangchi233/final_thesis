@@ -77,7 +77,7 @@ from torch.utils.tensorboard import SummaryWriter
 # define logger path
 logger_path = os.path.join(os.path.dirname(__file__), "..", "logs")
 # define tensorboard writer
-writer = SummaryWriter("/openbayes/tf_dir")
+writer = SummaryWriter("/openbayes/home/tf_dir")
 
 
 
@@ -265,7 +265,7 @@ def train_and_test(
                     prefix="Validation",
                     global_step=global_step,
                     writer=accelerator.trackers[0].writer,
-                    orig_hw=(),
+                    orig_hw=(validation_dataset_config.batch.image_height, validation_dataset_config.batch.image_width),
                 )
                 global_step+=1
 
@@ -549,10 +549,13 @@ def train_step(
 
 
         prompts= []
-        for prompt in batch["prompt"]:
-            prompts.extend(list(prompt))
-        batch["prompt"] = prompts
-        print(prompts)
+        
+        for t in range(batch["images"].shape[0]):
+            for prompt in batch["prompt"]:
+                prompts.append(prompt[t])
+        batch["prompt"] =  prompts
+       
+       
       
         batch_size, pose = collapse_tensor_to_batch_dim(batch["pose"])
         
@@ -625,6 +628,7 @@ def train_step(
         noisy_latents = torch.cat([noisy_latents,latents],dim = 1)
 
         # convert prompt to input_ids
+        
         batch["input_ids"] = tokenize_captions(tokenizer, batch["prompt"]).to(latents.device)
 
         # Get the text embedding for conditioning.
@@ -635,10 +639,11 @@ def train_step(
             random_p = torch.rand(N, device=latents.device, generator=generator)
             # Sample masks for the edit prompts.
             prompt_mask = random_p < 2 * finetune_config.model.conditioning_dropout_prob
-            prompt_mask = prompt_mask.reshape(N, 1, 1)
+            prompt_mask = prompt_mask.unsqueeze(1).unsqueeze(2)
             # Final text conditioning.
             null_conditioning = text_encoder(tokenize_captions(tokenizer, [""]).to(accelerator.device))[0]
             null_conditioning = null_conditioning.repeat(N, 1, 1)
+            print(encoder_hidden_states.shape, prompt_mask.shape, null_conditioning.shape)
             encoder_hidden_states = torch.where(prompt_mask, null_conditioning, encoder_hidden_states)
 
         # Get the target for unet-pred loss depending on the prediction type

@@ -80,7 +80,7 @@ class MVSSystem(LightningModule):
         self.optimizer = get_optimizer(self.hparams, self.model)
         scheduler = get_scheduler(self.hparams, self.optimizer)
         
-        return [self.optimizer], [scheduler]
+        return [self.optimizer]
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset,
@@ -183,7 +183,7 @@ if __name__ == '__main__':
                                           save_top_k=5,)
 
     logger = TestTubeLogger(
-        save_dir="logs",
+        save_dir="/openbayes/home/tf_dir",
         name=hparams.exp_name,
         debug=False,
         create_git_tag=False

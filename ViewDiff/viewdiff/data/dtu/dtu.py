@@ -198,10 +198,9 @@ class DTUDataset(Dataset):
         
         
         self.light_class = config.target_light
-        self.img_wh = None
+        self.img_wh = (int(config.img_wh), int(config.img_wh))
         if config.img_wh is not None:
-            if type(config.img_wh) is int:
-                self.img_wh = (config.img_wh, config.img_wh)
+            
             assert self.img_wh[0]%32==0 and self.img_wh[1]%32==0, \
                 'img_wh must both be multiples of 32!'
         self.debug = config.debug
@@ -445,7 +444,7 @@ class DTUDataset(Dataset):
         z_min = self.bbox[f"{scan}_train"]["z"]["min"]
         z_max = self.bbox[f"{scan}_train"]["z"]["max"]
 
-        sample['prompt'] = [f"modify the lightness of image by {target_light-light_input} scale"]
+        sample['prompt'] = [f"modify the lightness of image to {target_light} scale"]
         for i, vid in enumerate(view_ids):
         # NOTE that the id in image file names is from 1 to 49 (not 0~48)
            
@@ -538,7 +537,7 @@ class DTUDataset(Dataset):
         sample['target_imgs'] = target_imgs
         small_mask = sample["masks"]["level_0"]
         small_wh = (80,64)
-        sample["class"] = torch.tensor([light_idx])
+        sample["class"] = torch.tensor([target_light])
         sample["small_mask"] = interpolate(small_mask[None,None].float(), small_wh, mode='nearest')[0,0].byte()
 
         sample["bbox"] =torch.tensor([[x_min,y_min,z_min], 
