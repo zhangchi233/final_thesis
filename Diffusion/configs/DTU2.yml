@@ -1,47 +1,76 @@
 data:
-    type: "TrainTestDtuDataset"
+    # type: "TrainTestDtuDataset"
+    # train_dataset: "train.txt"
+    # val_dataset: "test.txt"
+    # patch_size: 256
+    # channels: 3
+    # num_workers: 4
+    # root_dir: "/root/autodl-tmp/mvs_training/dtu/Rectified"
+    # split: "/root/autodl-tmp/mvs_training/dtu/"
+    # ckpt_dir: "/root/autodl-tmp/Diffusion/ckpt/lora_version"
+    # conditional: True
+    # split_path: "/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/datasets/lists/"
+    type: "dtu"
     train_dataset: "train.txt"
     val_dataset: "test.txt"
+    single_frame: False
     patch_size: 256
     channels: 3
     num_workers: 4
-    root_dir: "/root/autodl-tmp/mvs_training/dtu/Rectified"
-    split: "/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/Rectified"
-    ckpt_dir: "/root/autodl-tmp/Diffusion-Low-Light/ckpt/"
+    root_dir: "/root/autodl-tmp/mvs_training/dtu/"
+    split: "/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/"
+    ckpt_dir: "/root/autodl-tmp/Diffusion/ckpt/lora_single_frame_decoder/"
     conditional: True
-    split_path: "/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/Rectified"
+    split_path: "/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu"
 
 model:
-    use_depth: False
+    use_depth: True
+    
+    use_lora: False
+    training_mode: "only_mvs"
+    
+    not_train_diffusion: True 
+    hfrm_ranks: 1
+    attn_ranks: 1
     in_channels: 3
+    only_mvs: True
+    debug_mvs_only: True
     out_ch: 3
     ch: 64
     ch_mult: [1, 2, 3, 4]
     num_res_blocks: 2
+    use_cross_frame: True 
+    num_input_view: 3
     dropout: 0.0
     ema_rate: 0.999
     ema: True
     resamp_with_conv: True
 logger:
-    exp_name: "only_image"
+    exp_name: "pytorch_lightning_refine"
     logger_path: "/root/tf-logs"
 diffusion:
     beta_schedule: linear
     beta_start: 0.0001
     beta_end: 0.02
-    num_diffusion_timesteps: 200
-
+    num_diffusion_timesteps: 20
+device: 'cuda'
 training:
-    batch_size: 2
+    batch_size: 1
     n_epochs: 500
     validation_freq: 1000
 
-optim:
+type:
     weight_decay: 0.000
-    optimizer: "Adam"
-    lr: 0.0001
+    num_epochs: 10
+    decay_gamma: 0.4
+    optimizer: "adam"
+    lr: 0.001
     amsgrad: False
     eps: 0.00000001
     step_size: 50
     gamma: 0.8
+    use_amp: True
+    lr_scheduler : 'cosine'
+    decay_step: 2000
+    warmup_epochs: 0
 

@@ -2,12 +2,42 @@ import torch
 import torch.nn as nn
 import warnings
 import math
+from models import lora
 
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
+class cross_frame_attention(nn.Module):
+    def __init__(self,dim,num_heads,dropout= 0., n_input_images = 3):
+        super(cross_frame_attention, self).__init__()
+        self.num_heads = num_heads
+        self.attention_head_size = int(dim / num_heads)
+        self.n_input_images = n_input_images
 
+        self.query = Depth_conv(in_ch=dim, out_ch=dim)
+        self.key = Depth_conv(in_ch=dim, out_ch=dim)
+        self.value = Depth_conv(in_ch=dim, out_ch=dim)
 
+        self.dropout = nn.Dropout(dropout)
+    def transpose_for_scores(self, x):
+        return x.permute(0, 2, 1, 3)
+    def forward(self, hidden_states):
+        mixed_query_layer = self.query(hidden_states)
+        mixed_key_layer = self.key(hidden_states)
+        mixed_value_layer = self.value(hidden_states)
+
+        query_layer = self.transpose_for_scores(mixed_query_layer)
+        key_layer = self.transpose_for_scores(mixed_key_layer)
+        value_layer = self.transpose_for_scores(mixed_value_layer)
+
+        # now concatenate the frames
+        from einops import rearrange
+        key_layer = rearrange(key_layer, '(b v) h c w -> b h c (v w)', v = self.n_input_images)
+        value_layer = rearrange(value_layer, '(b v) h c w -> b h c (v w)', v = self.n_input_images)
+        key_layer = key_layer.repeat(self.n_input_images, 1, 1, 1)
+        value_layer = value_layer.repeat(self.n_input_images, 1, 1, 1)
+
+        
 
 class cross_attention(nn.Module):
     def __init__(self, dim, num_heads, dropout=0.):
@@ -25,6 +55,7 @@ class cross_attention(nn.Module):
         self.value = Depth_conv(in_ch=dim, out_ch=dim)
 
         self.dropout = nn.Dropout(dropout)
+    
 
     def transpose_for_scores(self, x):
         '''
@@ -35,7 +66,7 @@ class cross_attention(nn.Module):
         print(new_x_shape)
         x = x.view(*new_x_shape)
         '''
-        return x.permute(0, 2, 1, 3)
+        return x.permute(0, 2, 1, 3) # b, c, h, w -> b, h, c, w
 
     def forward(self, hidden_states, ctx):
         mixed_query_layer = self.query(hidden_states)
@@ -114,10 +145,9 @@ class Dilated_Resblock(nn.Module):
         out = self.model(x) + x
 
         return out
-
-
+    
 class HFRM(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels,use_lora = False,ranks = 16):
         super(HFRM, self).__init__()
 
         self.conv_head = Depth_conv(in_channels, out_channels)
@@ -131,8 +161,16 @@ class HFRM(nn.Module):
         self.cross_attention1 = cross_attention(out_channels, num_heads=8)
 
         self.conv_tail = Depth_conv(out_channels, in_channels)
+        if use_lora:
+            lora.plugin_lora(self.cross_attention0, ranks)
+            lora.plugin_lora(self.cross_attention1, ranks)
+    
+    # if module include this, when training, the weights will be merged
 
-    def forward(self, x):
+        
+
+            
+    def forward(self, x,):
 
         b, c, h, w = x.shape
 

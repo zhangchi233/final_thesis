@@ -2,7 +2,11 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional
-
+import sys
+import os
+from einops import rearrange
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
+from models import lora
 # This script is from the following repositories
 # https://github.com/ermongroup/ddim
 # https://github.com/bahjat-kawar/ddrm
@@ -140,10 +144,10 @@ class ResnetBlock(nn.Module):
 
 
 class AttnBlock(nn.Module):
-    def __init__(self, in_channels):
+    def __init__(self, in_channels,use_lora = False,lora_ranks = 4,use_cross_frame = False,num_input_view = 3):
         super().__init__()
         self.in_channels = in_channels
-
+        self.num_input_view = 3
         self.norm = Normalize(in_channels)
         self.q = torch.nn.Conv2d(in_channels,
                                  in_channels,
@@ -165,7 +169,14 @@ class AttnBlock(nn.Module):
                                         kernel_size=1,
                                         stride=1,
                                         padding=0)
-
+        if use_lora:
+            lora.plugin_lora(self.q, lora_ranks)
+            lora.plugin_lora(self.k, lora_ranks)
+            lora.plugin_lora(self.v, lora_ranks)
+            lora.plugin_lora(self.proj_out, lora_ranks)
+        self.use_cross_frame = use_cross_frame
+            
+    
     def forward(self, x):
         h_ = x
         h_ = self.norm(h_)
@@ -178,12 +189,25 @@ class AttnBlock(nn.Module):
         q = q.reshape(b, c, h*w)
         q = q.permute(0, 2, 1)   # b,hw,c
         k = k.reshape(b, c, h*w)  # b,c,hw
+        
+        if self.use_cross_frame:
+            k = rearrange(k,'(b vs) c hw -> b c (vs hw)',vs = self.num_input_view)
+            
+            k = k.repeat_interleave(self.num_input_view,dim = 0)
+           
+           
+            
+            
         w_ = torch.bmm(q, k)     # b,hw,hw    w[b,i,j]=sum_c q[b,i,c]k[b,c,j]
         w_ = w_ * (int(c)**(-0.5))
         w_ = torch.nn.functional.softmax(w_, dim=2)
 
         # attend to values
+
         v = v.reshape(b, c, h*w)
+        if self.use_cross_frame:
+            v = rearrange(v,'(b vs) c hw -> b c (vs hw)',vs = self.num_input_view)
+            v = v.repeat_interleave(self.num_input_view,dim = 0)
         w_ = w_.permute(0, 2, 1)   # b,hw,hw (first hw of k, second of q)
         # b, c,hw (hw of q) h_[b,c,j] = sum_i v[b,c,i] w_[b,i,j]
         h_ = torch.bmm(v, w_)
@@ -229,6 +253,7 @@ class DiffusionUNet(nn.Module):
         in_ch_mult = (1,)+ch_mult
         self.down = nn.ModuleList()
         block_in = None
+       
         for i_level in range(self.num_resolutions):
             block = nn.ModuleList()
             attn = nn.ModuleList()
@@ -241,7 +266,8 @@ class DiffusionUNet(nn.Module):
                                          dropout=dropout))
                 block_in = block_out
                 if i_level == 2:
-                    attn.append(AttnBlock(block_in))
+                    attn.append(AttnBlock(block_in,config.model.use_lora,config.model.attn_ranks,use_cross_frame=
+                                          config.model.use_cross_frame,num_input_view = config.model.num_input_view))
             down = nn.Module()
             down.block = block
             down.attn = attn
@@ -255,7 +281,7 @@ class DiffusionUNet(nn.Module):
                                        out_channels=block_in,
                                        temb_channels=self.temb_ch,
                                        dropout=dropout)
-        self.mid.attn_1 = AttnBlock(block_in)
+        self.mid.attn_1 = AttnBlock(block_in,config.model.use_lora,config.model.attn_ranks)
         self.mid.block_2 = ResnetBlock(in_channels=block_in,
                                        out_channels=block_in,
                                        temb_channels=self.temb_ch,
@@ -277,7 +303,8 @@ class DiffusionUNet(nn.Module):
                                          dropout=dropout))
                 block_in = block_out
                 if i_level == 2:
-                    attn.append(AttnBlock(block_in))
+                    attn.append(AttnBlock(block_in,config.model.use_lora,config.model.attn_ranks,use_cross_frame=
+                                          config.model.use_cross_frame,num_input_view = config.model.num_input_view))
             up = nn.Module()
             up.block = block
             up.attn = attn

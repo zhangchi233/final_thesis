@@ -24,17 +24,19 @@ class TrainTestDtuDataset(Dataset):
         self.config = config
 
     def get_loaders(self):
-        if self.config.model.use_depth:
+        if not self.config.data.single_frame:
             train_dataset = DTUDataset(self.config.data.root_dir,split='train',n_views=3,levels=3,depth_interval=2.65,
+                                       split_path=self.config.data.split_path,
                                         img_wh=None
                                                 )
             val_dataset = DTUDataset(self.config.data.root_dir,split='val',n_views=3,levels=3,depth_interval=2.65,
+             split_path=self.config.data.split_path,
                                             )
         else:
-            train_dataset = Dtu(self.config.data.root_dir, patch_size=self.config.data.patch_size)
-            val_dataset = Dtu(self.config.data.root_dir, patch_size=self.config.data.patch_size, train=False)
-
-
+            train_dataset = Dtu(self.config.data.root_dir,patch_size=self.config.data.patch_size,train=True)
+            val_dataset = DTUDataset("/root/autodl-tmp/mvs_training/dtu",split='val',n_views=3,levels=3,depth_interval=2.65,
+             split_path=self.config.data.split_path,
+                                            )
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=self.config.training.batch_size,
                                                    shuffle=True, num_workers=self.config.data.num_workers,
                                                    pin_memory=True,)
@@ -45,7 +47,7 @@ class TrainTestDtuDataset(Dataset):
 
         return train_loader, val_loader
 class DTUDataset(Dataset):
-    def __init__(self, root_dir, split, n_views=3, levels=3, depth_interval=2.65,
+    def __init__(self, root_dir, split,split_path=None, n_views=3, levels=3, depth_interval=2.65,
                  img_wh=None):
         """
         img_wh should be set to a tuple ex: (1152, 864) to enable test mode!
@@ -97,8 +99,8 @@ class DTUDataset(Dataset):
             intrinsics, extrinsics, depth_min = \
                 self.read_cam_file(proj_mat_filename)
             if self.img_wh is not None: # resize the intrinsics to the coarsest level
-                intrinsics[0] *= self.img_wh[0]/512
-                intrinsics[1] *= self.img_wh[1]/640
+                intrinsics[0] *= self.img_wh[0]/640
+                intrinsics[1] *= self.img_wh[1]/512
 
             # multiply intrinsics and extrinsics to get projection matrix
             proj_mat_ls = []
@@ -183,6 +185,8 @@ class DTUDataset(Dataset):
                                         # T.Normalize(mean=[0.485, 0.456, 0.406], 
                                         #             std=[0.229, 0.224, 0.225]),
                                        ])
+        self.transform2 = T.Compose([T.Normalize(mean=[0.485, 0.456, 0.406], 
+                                                     std=[0.229, 0.224, 0.225])])
        
             
         self.unpreprocess = T.Compose([
@@ -291,10 +295,13 @@ class DTUDataset(Dataset):
         gaussian_noise = torch.normal(mean = imgs_dark, std = sigmoid,)
         imgs_noisy = imgs_dark + gaussian_noise
         imgs_noisy = torch.clamp(imgs_noisy, 0, 1)
+
+        imgs = self.transform2(imgs)
+        imgs_noisy = self.transform2(imgs_noisy)
         
         sample['cams'] = cams
-        sample['imgs'] = imgs
-        sample["imgs_train"] = imgs_noisy
+        sample['imgs_gt'] = imgs
+        sample["imgs"] = imgs_noisy
         sample['proj_mats'] = proj_mats
         sample['depth_interval'] = torch.FloatTensor([self.depth_interval])
         sample['scan_vid'] = (scan, ref_view)
@@ -359,10 +366,10 @@ class Dtu(torch.utils.data.Dataset):
         gaussian_noise = torch.normal(input_img, sigmoid,)
         imgs_noisy = input_img + gaussian_noise
         imgs_noisy = torch.clamp(imgs_noisy, 0, 1)
+        input_img = imgs_noisy
         
-        
-        sample["imgs_train"] = input_img
-        sample["imgs"] = gt_img
+        sample["imgs"] = input_img
+        sample["imgs_gt"] = gt_img
         sample["scan_vid"] = input_name.split("/")[-2]+img_id
 
         return sample

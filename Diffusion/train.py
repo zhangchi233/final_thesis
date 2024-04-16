@@ -16,9 +16,9 @@ from models import DenoisingDiffusion
 
 def parse_args_and_config():
     parser = argparse.ArgumentParser(description='Training Wavelet-Based Diffusion Model')
-    parser.add_argument("--config", default='/root/autodl-tmp/Diffusion-Low-Light/configs/DTU2.yml', type=str,
+    parser.add_argument("--config", default='/root/autodl-tmp/Diffusion/configs/DTU2.yml', type=str,
                         help="Path to the config file")
-    parser.add_argument('--resume', default='', type=str,
+    parser.add_argument('--resume', default='/root/autodl-tmp/Diffusion/ckpt/enhancement/model_latest.pth.tar', type=str,
                         help='Path for checkpoint to load and resume')
     parser.add_argument("--sampling_timesteps", type=int, default=10,
                         help="Number of implicit sampling steps for validation image patches")

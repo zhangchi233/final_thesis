@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 import utils
+from metrics.metric import abs_error, acc_threshold
 from models.unet import DiffusionUNet
 from models.wavelet import DWT, IWT
 from pytorch_msssim import ssim
@@ -117,10 +118,10 @@ class Net(nn.Module):
 
         self.args = args
         self.config = config
-        self.device = config.device
-
-        self.high_enhance0 = HFRM(in_channels=3, out_channels=64)
-        self.high_enhance1 = HFRM(in_channels=3, out_channels=64)
+        
+        self.device = self.config.device
+        self.high_enhance0 = HFRM(in_channels=3, out_channels=64,use_lora=config.model.use_lora,ranks=config.model.hfrm_ranks)
+        self.high_enhance1 = HFRM(in_channels=3, out_channels=64,use_lora=config.model.use_lora,ranks=config.model.hfrm_ranks)
         self.Unet = DiffusionUNet(config)
         
 
@@ -134,7 +135,7 @@ class Net(nn.Module):
 
         self.betas = torch.from_numpy(betas).float()
         self.num_timesteps = self.betas.shape[0]
-
+    
     @staticmethod
     def compute_alpha(beta, t):
         beta = torch.cat([torch.zeros(1).to(beta.device), beta], dim=0)
@@ -164,7 +165,7 @@ class Net(nn.Module):
             xs.append(xt_next.to(x.device))
 
         return xs[-1]
-
+    
     def forward(self, x):
         data_dict = {}
         dwt, idwt = DWT(), IWT()
@@ -246,8 +247,7 @@ class DenoisingDiffusion(object):
         self.l1_loss = torch.nn.L1Loss()
         self.TV_loss = TVLoss()
 
-        self.optimizer, self.scheduler = utils.optimize.get_optimizer(self.config, self.model.parameters())
-        self.start_epoch, self.step = 0, 0
+        
         if config.logger is not None:
             exp_name = config.logger.exp_name
             logger_path = config.logger.logger_path
@@ -263,19 +263,59 @@ class DenoisingDiffusion(object):
                 exp_name = exp_name
             
             self.logger = SummaryWriter(log_dir=os.path.join(logger_path, exp_name))
+        
         if config.model.use_depth:
+            self.optimizer = None
+            self.scheduler = None
             self.depth_model = CascadeMVSNet(n_depths=[8,32,48],
                         interval_ratios=[1.0,2.0,4.0],
                         num_groups=1,
                         
                         norm_act=ABN).cuda()
-            load_ckpt(self.depth_model, '/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/ckpts/_ckpt_epoch_10.ckpt')
+            #load_ckpt(self.depth_model, '/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/ckpts/_ckpt_epoch_10.ckpt')
             self.depth_transform = T.Compose([
                                         T.Normalize(mean=[0.485, 0.456, 0.406], 
                                                      std=[0.229, 0.224, 0.225]),
                                        ])
             print("load depth model: ", self.depth_model)
+            self.depth_optimizer, self.depth_scheduler = utils.optimize.get_optimizer(self.config, self.depth_model.parameters())
             self.depth_loss = SL1Loss()
+            if self.config.model.training_mode=="include_decoder":
+                
+                trainable_params =[]
+                
+                for name, param in self.model.named_parameters():
+                    if "high_enhance" in name:
+                        trainable_params.append(param)
+                    elif "Unet.up.3" in name:
+                        trainable_params.append(param)
+                    else:
+                        param.requires_grad_(False)
+
+                
+                
+                self.depth_optimizer, self.depth_scheduler = utils.optimize.get_optimizer(self.config, list(self.depth_model.parameters())+\
+                                                                                          trainable_params)
+            elif self.config.model.training_mode=="only_mvs":
+                for param in self.model.module.parameters():
+                    
+                    param.requires_grad = False    
+            elif self.config.model.training_mode=="full_model":
+                trainable_params =list(self.model.parameters())
+                self.depth_optimizer, self.depth_scheduler = utils.optimize.get_optimizer(self.config, list(self.depth_model.parameters())+\
+                                                                                          trainable_params)
+            elif self.config.model.training_mode=="including_image_noise":
+                self.optimizer, self.scheduler = utils.optimize.get_optimizer(self.config, self.model.parameters())
+                self.not_train_diffusion = False
+            else:
+
+                self.optimizer = None
+                self.scheduler = None
+                
+        else:
+            self.optimizer, self.scheduler = utils.optimize.get_optimizer(self.config, self.model.parameters())
+            self.depth_scheduler=None
+        self.start_epoch, self.step = 0, 0
 
     def load_ddm_ckpt(self, load_path, ema=False):
         checkpoint = utils.logging.load_checkpoint(load_path, None)
@@ -311,6 +351,7 @@ class DenoisingDiffusion(object):
             from tqdm import tqdm
 
             train_loader = tqdm(train_loader)
+            self.model.train()
             for i, batch in enumerate(train_loader):
                 # print(x.shape,x.min(),x.max())
                 img_ori = batch["imgs_train"]
@@ -322,23 +363,21 @@ class DenoisingDiffusion(object):
                 y = batch["scan_vid"]
                 
                 data_time += time.time() - data_start
-                self.model.train()
+                
                 self.step += 1
 
                 x = x.to(self.device)
 
                 output = self.model(x)
                 
-                noise_loss, photo_loss, frequency_loss = self.estimation_loss(x, output)
-
                 
 
-                loss = noise_loss + photo_loss + frequency_loss
-
-                if self.config.model.use_depth and ((random.random() < 0.35) or (self.step % 10 == 0)):
+                if self.config.model.use_depth: #and ((random.random() < 0.35) or (self.step % 10 == 0)):
                     proj_mats, depths, masks, init_depth_min, depth_interval = self.decode_batch(batch)
                     
+
                     imgs = output["pred_x"]
+                    
                     # reshape to (B, N, C, H, W)
                     proj_mats = proj_mats.to(self.device)
                     init_depth_min = init_depth_min.to(self.device)
@@ -352,42 +391,108 @@ class DenoisingDiffusion(object):
 
                     b, v = img_ori.shape[0], img_ori.shape[1]
                     imgs = rearrange(imgs, '(b v) c h w -> b v c h w', b=b, v=v) 
-                    
+                    if self.config.model.debug_mvs_only:
+                        imgs = img_ori.to(self.device)
                     imgs = self.depth_transform(imgs)
+                   
+
                     results = self.depth_model(imgs, proj_mats, init_depth_min, depth_interval)
                     depth_loss = self.depth_loss(results, depths, masks)
-                    loss += depth_loss
-                    if self.step % 10 == 0:
-                        with torch.no_grad():
-                            img_gt = img_gt.to(self.device)
-                            img_gt = self.depth_transform(img_gt)
-                            results = self.depth_model(img_gt, proj_mats, init_depth_min, depth_interval)
-                            ori_loss = self.depth_loss(results, depths, masks)
+                    self.depth_optimizer.zero_grad()
+                    #self.optimizer.zero_grad()
+                    depth_loss.backward()
+                    self.depth_optimizer.step()
+                    #self.optimizer.step()
+                    
+                    log = {}
+                    depth_pred = results['depth_0']
+                    depth_gt = depths['level_0']
+                    mask = masks['level_0']
+                    # self.logger.add_scalars['train/abs_err'] =  abs_error(depth_pred, depth_gt, mask).mean()
+                    # self.logger.add_scalars['train/acc_1mm'] = acc_threshold(depth_pred, depth_gt, mask, 1).mean()
+                    # self.logger.add_scalars['train/acc_2mm'] = acc_threshold(depth_pred, depth_gt, mask, 2).mean()
+                    # self.logger.add_scalars['train/acc_4mm'] = acc_threshold(depth_pred, depth_gt, mask, 4).mean()
+                    # self.logger.add_scalars["train/depth_loss"] = depth_loss.item()
+                    
+                    self.logger.add_scalar("train/abs_err", abs_error(depth_pred, depth_gt, mask).mean(), self.step)
+                    self.logger.add_scalar("train/acc_1mm", acc_threshold(depth_pred, depth_gt, mask, 1).mean(), self.step)
+                    self.logger.add_scalar("train/acc_2mm", acc_threshold(depth_pred, depth_gt, mask, 2).mean(), self.step)
+                    self.logger.add_scalar("train/acc_4mm", acc_threshold(depth_pred, depth_gt, mask, 4).mean(), self.step)
+                    self.logger.add_scalar("train/depth_loss", depth_loss.item(), self.step)
+
+
+
+
+                    imgs = img_gt.to(self.device)
+                    
+                    imgs = self.depth_transform(imgs)
+                    ori_results = self.depth_model(imgs, proj_mats, init_depth_min, depth_interval)
+                    ori_loss = self.depth_loss(ori_results, depths, masks)
+                    self.logger.add_scalar("train/depth_ori", ori_loss.item(), self.step)
+                    self.logger.add_scalar("train/depth_loss_ratio", (depth_loss/ori_loss), self.step)
+
+                    
+
+
+                    
+
+
+                    
 
                             
 
 
-                else:
-                    depth_loss = 0
-                    ori_loss = 1
+                if not self.config.model.not_train_diffusion:
+                    noise_loss, photo_loss, frequency_loss = self.estimation_loss(x, output)
+
                 
 
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
+                    loss = noise_loss + photo_loss + frequency_loss
+                    depth_loss = 0
+                    ori_loss = 1
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    self.optimizer.step()
+                
+                 
+                
+                
                 if self.step % 10 == 0:
+                   
+                    with torch.no_grad():
+                        batch = next(iter(val_loader))
+                        img_ori = batch["imgs_train"]
+                        img_gt = batch["imgs"]
+                        x = torch.cat([img_ori, img_gt], dim=2 if img_ori.ndim == 5 else 1)
+                        proj_mats, depths, masks, init_depth_min, depth_interval = self.decode_batch(batch)
+                        proj_mats = proj_mats.to(self.device)
+                        init_depth_min = init_depth_min.to(self.device)
+                        depth_interval = depth_interval.to(self.device)
+                        x = rearrange(x, 'b v c h w -> (b v) c h w ') if x.ndim == 5 else x
+
+                        y = batch["scan_vid"]
+                        
+                       
+
+                        x = x.to(self.device)
+
+                        output = self.model(x)
+                        noise_loss, photo_loss, frequency_loss = self.estimation_loss(x, output)
+
+                
+
+                        loss = noise_loss + photo_loss + frequency_loss
+                       
                     if hasattr(self, "logger"):
                         self.logger.add_scalar("train/noise_loss", noise_loss.item(), self.step)
                         self.logger.add_scalar("train/photo_loss", photo_loss.item(), self.step)
                         self.logger.add_scalar("train/frequency_loss", frequency_loss.item(), self.step)
-                        self.logger.add_scalar("train/total_loss", loss.item(), self.step,
-                        self.logger.add_scalar("train/depth_loss", depth_loss, self.step),
-                        self.logger.add_scalar("train/ori_depth_loss", ori_loss, self.step),
-                        self.logger.add_scalar("train/depth_ratio", depth_loss/ori_loss, self.step))
+                        self.logger.add_scalar("train/total_loss", loss.item(), self.step,)
+                        
                         
 
                     train_loader.set_description_str("step:{}, lr:{:.6f}, noise_loss:{:.4f}, photo_loss:{:.4f}, "
-                          "frequency_loss:{:.4f}, depth_loss_ratio:{:.4f}, depth_loss:{:.4f}, depth_ori: {:.4f}".format(self.step, self.scheduler.get_last_lr()[0],
+                          "frequency_loss:{:.4f}, depth_loss_ratio:{:.4f}, depth_loss:{:.4f}, depth_ori: {:.4f}".format(self.step, self.scheduler.get_last_lr()[0] if self.scheduler is not None else self.depth_scheduler.get_last_lr()[0],
                                                          noise_loss.item(), photo_loss.item(),
                                                          frequency_loss.item(), (depth_loss/ori_loss)
                                                          ,depth_loss,ori_loss),
@@ -395,21 +500,23 @@ class DenoisingDiffusion(object):
                 self.ema_helper.update(self.model)
                 data_start = time.time()
 
-                if self.step % self.config.training.validation_freq == 0:
+                if self.step % self.config.training.validation_freq == 0 or self.step ==1:
                     self.model.eval()
                     self.sample_validation_patches(val_loader, self.step)
 
                     utils.logging.save_checkpoint({'step': self.step, 'epoch': epoch + 1,
                                                    'state_dict': self.model.state_dict(),
-                                                   'optimizer': self.optimizer.state_dict(),
-                                                   'scheduler': self.scheduler.state_dict(),
+                                                   'optimizer': self.optimizer.state_dict() if self.optimizer is not None else None,
+                                                   'scheduler': self.scheduler.state_dict() if self.scheduler is not None else None,
                                                    'ema_helper': self.ema_helper.state_dict(),
                                                    'params': self.args,
                                                    'config': self.config},
                                                   filename=os.path.join(self.config.data.ckpt_dir, 'model_latest'))
-                        
-            self.scheduler.step()
-
+                    self.model.train()
+            if self.scheduler is not None:
+                self.scheduler.step()
+            if self.depth_scheduler is not None:
+                self.depth_scheduler.step()
     def estimation_loss(self, x, output):
 
         input_high0, input_high1, gt_high0, gt_high1 = output["input_high0"], output["input_high1"],\
@@ -469,15 +576,80 @@ class DenoisingDiffusion(object):
                 pred_x = out["pred_x"]
                 pred_x = pred_x[:, :, :img_h, :img_w]
                 pred_x = pred_x.reshape(img_input.shape)
+
                 
+                if self.config.model.use_depth: #and ((random.random() < 0.35) or (self.step % 10 == 0)):
+                    proj_mats, depths, masks, init_depth_min, depth_interval = self.decode_batch(batch)
+                    
+                    imgs = out["pred_x"]
+                    # reshape to (B, N, C, H, W)
+                    proj_mats = proj_mats.to(self.device)
+                    init_depth_min = init_depth_min.to(self.device)
+                    depth_interval = depth_interval.to(self.device)
+                    for level in depths:
+                        depths[level] = depths[level].to(self.device)
+                        masks[level] = masks[level].to(self.device)
+                    for level in masks:
+                        masks[level] = masks[level].to(self.device)
+                    
+
+                    b, v = img_gt.shape[0], img_gt.shape[1]
+                    imgs = rearrange(imgs, '(b v) c h w -> b v c h w', b=b, v=v) 
+                    
+                    imgs = self.depth_transform(imgs)
+                   
+
+                    results = self.depth_model(imgs, proj_mats, init_depth_min, depth_interval)
+                    depth_loss = self.depth_loss(results, depths, masks)
+                    
+                    #self.optimizer.step()
+                    
+                    log = {}
+                    depth_pred = results['depth_0']
+                    depth_gt = depths['level_0']
+                    mask = masks['level_0']
+                    # self.logger.add_scalars['train/abs_err'] =  abs_error(depth_pred, depth_gt, mask).mean()
+                    # self.logger.add_scalars['train/acc_1mm'] = acc_threshold(depth_pred, depth_gt, mask, 1).mean()
+                    # self.logger.add_scalars['train/acc_2mm'] = acc_threshold(depth_pred, depth_gt, mask, 2).mean()
+                    # self.logger.add_scalars['train/acc_4mm'] = acc_threshold(depth_pred, depth_gt, mask, 4).mean()
+                    # self.logger.add_scalars["train/depth_loss"] = depth_loss.item()
+                    
+                    
+
+
+
+                    imgs = img_input.to(self.device)
+                    
+                    imgs = self.depth_transform(imgs)
+                    ori_results = self.depth_model(imgs, proj_mats, init_depth_min, depth_interval)
+                    ori_loss = self.depth_loss(ori_results, depths, masks)
+                    
+               
                 if hasattr(self, "logger"):
-                    img_input = rearrange(img_input, 'b v c h w ->c h (b v w)')
-                    img_gt = rearrange(img_gt, 'b v c h w ->c h (b v w)')
-                    pred_x = rearrange(pred_x, 'b v c h w ->c h (b v w)')
+                    #
+                    if len(img_input.shape) == 5:
+                        img_input = rearrange(img_input, 'b v c h w ->c h (b v w)')
+                        img_gt = rearrange(img_gt, 'b v c h w ->c h (b v w)')
+                        pred_x = rearrange(pred_x, 'b v c h w ->c h (b v w)')
+                    else:
+                        img_input = rearrange(img_input, 'v c h w ->c h (v w)')
+                        img_gt = rearrange(img_gt, 'v c h w ->c h (v w)')
+                        pred_x = rearrange(pred_x, 'v c h w ->c h (v w)')
+                    
                     self.logger.add_image("val/input", img_input, step)
                     self.logger.add_image("val/gt", img_gt, step)
                     self.logger.add_image("val/pred", pred_x, step)
-                utils.logging.save_image(pred_x, os.path.join(image_folder, str(step), f"{y[0]}.png"))
+                    self.logger.add_scalar("val/abs_err", abs_error(depth_pred, depth_gt, mask).mean(), self.step)
+                    self.logger.add_scalar("val/acc_1mm", acc_threshold(depth_pred, depth_gt, mask, 1).mean(), self.step)
+                    self.logger.add_scalar("val/acc_2mm", acc_threshold(depth_pred, depth_gt, mask, 2).mean(), self.step)
+                    self.logger.add_scalar("val/acc_4mm", acc_threshold(depth_pred, depth_gt, mask, 4).mean(), self.step)
+                    self.logger.add_scalar("val/depth_loss", depth_loss.item(), self.step)
+                    self.logger.add_scalar("val/depth_ori", ori_loss.item(), self.step)
+                    self.logger.add_scalar("val/depth_loss_ratio", (depth_loss/ori_loss), self.step)
+                
+                saves = torch.stack([img_input, img_gt, pred_x.cpu()])
+
+                utils.logging.save_image(saves, os.path.join(image_folder,self.config.logger.exp_name, str(step), f"{y[0]}_{i}.png"))
 
 
 
