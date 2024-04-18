@@ -21,12 +21,13 @@ from losses import loss_dict
 from metrics import *
 
 # pytorch-lightning
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping      
 from pytorch_lightning import LightningModule, Trainer
+
 from pytorch_lightning.loggers import TestTubeLogger
 
 class MVSSystem(LightningModule):
-   
+
     def __init__(self, args,config = None):
 
         super(MVSSystem, self).__init__()
@@ -35,7 +36,7 @@ class MVSSystem(LightningModule):
                                              std=[0.229, 0.224, 0.225])
         
         self.config = config
-        self.hparams = args
+        self.hparam = args
         self.loss = loss_dict["sl1"]
 
         self.model =  Net(args,config)
@@ -45,13 +46,23 @@ class MVSSystem(LightningModule):
                                    interval_ratios=args.interval_ratios,
                                    num_groups=args.num_groups,
                                    norm_act=InPlaceABN)
-        if self.hparams.ckpt_path != '':
+            
+        if self.hparam.ckpt_path != '':
             self.original_depth_model= CascadeMVSNet(n_depths=args.n_depths,
                                    interval_ratios=args.interval_ratios,
                                    num_groups=args.num_groups,
                                    norm_act=InPlaceABN)
-            print('Load model from', self.hparams.ckpt_path)
-            load_ckpt(self.original_depth_model, self.hparams.ckpt_path,"loss")
+            print('Load model from', self.hparam.ckpt_path)
+            load_ckpt(self.original_depth_model, self.hparam.ckpt_path,"loss")
+            for name,param in self.depth_model.named_parameters():
+                if name in self.original_depth_model.state_dict():
+                    if param.shape == self.original_depth_model.state_dict()[name].shape:
+                        param.data = self.original_depth_model.state_dict()[name].data
+                      
+            
+                    
+            
+            
         else:
             self.original_depth_model = None
         
@@ -62,22 +73,22 @@ class MVSSystem(LightningModule):
         
 
         # if num gpu is 1, print model structure and number of params
-        if self.hparams.num_gpus == 1:
+        if self.hparam.num_gpus == 1:
             # print(self.model)
             print('number of parameters : %.2f M' % 
                   (sum(p.numel() for p in self.model.parameters() if p.requires_grad) / 1e6))
         
         # load model if checkpoint path is provided
-        if self.hparams.resume != '':
-            print('Load model from', self.hparams.resume)
-            self.load_ddm_ckpt(self.hparams.resume, ema=False)
+        if self.hparam.resume != '':
+            print('Load model from', self.hparam.resume)
+            self.load_ddm_ckpt(self.hparam.resume, ema=False)
         
         
     def load_ddm_ckpt(self, load_path, ema=False):
         checkpoint = utils.logging.load_checkpoint(load_path, None)
         self.model = torch.nn.DataParallel(self.model)
         self.model.load_state_dict(checkpoint['state_dict'], strict=True)
-        
+        self.model = self.model.module
         # self.ema_helper.load_state_dict(checkpoint['ema_helper'])
         # if ema:
         #     self.ema_helper.ema(self.model)
@@ -86,6 +97,7 @@ class MVSSystem(LightningModule):
         
         
         imgs = batch['imgs']
+
         proj_mats = batch['proj_mats']
         depths = batch['depths']
         masks = batch['masks']
@@ -107,9 +119,10 @@ class MVSSystem(LightningModule):
                 
 
         
-
-        output = self.model(x)
         
+        output = self.model(x)
+        img_gt = self.depth_transform(img_ori)
+        output["img"] = img_gt
        
 
         return output
@@ -124,19 +137,33 @@ class MVSSystem(LightningModule):
                                   )
 
     def configure_optimizers(self):
-        optimizers = []
-        if self.config.model.training_mode=="only_mvs":
+       
+        if self.config.model.training_mode== "only_mvs":
             self.optimizer = get_optimizer(self.config.type, self.depth_model)
-            optimizers.append(self.optimizer)
+            
             for param in self.model.parameters():
                 param.requires_grad = False
+        elif self.config.model.training_mode=="include_encoder":
+            self.optimizer = get_optimizer(self.config.type, self.depth_model)
+            trainable_params = []
+            for name, param in self.model.named_parameters():
+                # if "up" in name and "attn" in name and (".q." in name or ".k." in name or ".v." in name):
+                #     trainable_params.append(param)
+                #     print(name)
+                if "cross_attention1" in name and ("query" in name or "key" in name or "value" in name):
+                    trainable_params.append(param)
+                    print(name)
+                else:
+                    param.requires_grad = False
+            self.optimizer.add_param_group({'params': trainable_params})
+           
             
         else:
             self.optimizer = get_optimizer(self.config.type, self.model)
-            optimizers.append(self.optimizer)
+            
         scheduler = get_scheduler(self.config.type, self.optimizer)
         
-        return optimizers
+        return [self.optimizer], [scheduler]
 
     def train_dataloader(self):
         train_loader = DataLoader(self.train_dataset,
@@ -169,6 +196,8 @@ class MVSSystem(LightningModule):
         
         if self.config.model.use_depth:
             results = self.depth_model(outputs, proj_mats, init_depth_min, depth_interval)
+            
+            
             imgs_ = T.Normalize(mean=[0.485, 0.456, 0.406],
                                 std=[0.229, 0.224, 0.225])(imgs)    
             original_results= self.original_depth_model(imgs_, proj_mats, init_depth_min, depth_interval)
@@ -183,6 +212,17 @@ class MVSSystem(LightningModule):
             log['train/acc_1mm'] = acc_threshold(depth_pred, depth_gt, mask, 1).mean()
             log['train/acc_2mm'] = acc_threshold(depth_pred, depth_gt, mask, 2).mean()
             log['train/acc_4mm'] = acc_threshold(depth_pred, depth_gt, mask, 4).mean()
+
+            self.logger.experiment.add_scalar('train/loss', loss, self.global_step)
+            self.logger.experiment.add_scalar('train/abs_err', abs_err, self.global_step)
+            self.logger.experiment.add_scalar('train/acc_1mm', log['train/acc_1mm'], self.global_step)
+            self.logger.experiment.add_scalar('train/acc_2mm', log['train/acc_2mm'], self.global_step)
+            self.logger.experiment.add_scalar('train/acc_4mm', log['train/acc_4mm'], self.global_step)
+            self.log('train/original', original_depth_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+
+            
+            
+            
             
         else:
             noise_loss, photo_loss, frequency_loss =  self.loss(x, outputs)
@@ -194,7 +234,19 @@ class MVSSystem(LightningModule):
 
         
         with torch.no_grad():
-            if batch_nb%20 == 0:
+            if batch_nb%50 == 0:
+                log["train/original_depth_loss"] = original_depth_loss
+                log["train/ori_abs_err"] = ori_abs_err = abs_error(original_results['depth_0'], depth_gt, mask).mean()
+                log["train/ori_acc_1mm"] = ori_acc_1mm = acc_threshold(original_results['depth_0'], depth_gt, mask, 1).mean()
+                log["train/ori_acc_2mm"] = ori_acc_2mm = acc_threshold(original_results['depth_0'], depth_gt, mask, 2).mean()
+                log["train/ori_acc_4mm"] = ori_acc_4mm = acc_threshold(original_results['depth_0'], depth_gt, mask, 4).mean()
+
+                log["train/depth_loss_ratio"] = depth_loss/(original_depth_loss+1e-7)
+                log["train/abs_err_ratio"] = abs_err/(ori_abs_err+1e-7)
+                log["train/acc_1mm_ratio"] = log["train/acc_1mm"]/(ori_acc_1mm+1e-7)
+                log["train/acc_2mm_ratio"] = log["train/acc_2mm"]/(ori_acc_2mm+1e-7)
+                log["train/acc_4mm_ratio"] = log["train/acc_4mm"]/ (ori_acc_4mm+1e-7)
+
                 pred_x = outputs["pred_x"]
                 if len(imgs.shape) == 5:
                     imgs = rearrange(imgs, 'b v c h w ->b c h (v w)')
@@ -203,7 +255,8 @@ class MVSSystem(LightningModule):
 
                 
                 self.logger.experiment.add_images('train/input_gt_pred',imgs, self.global_step)
-                self.logger.experiment.add_images('train/gt',img_gt, self.global_step)
+                
+                self.logger.experiment.add_images('train/gt',img_gt, self.global_step,)
                 self.logger.experiment.add_images('train/pred',pred_x, self.global_step)
 
                 
@@ -211,10 +264,24 @@ class MVSSystem(LightningModule):
                 depth_pred_ = visualize_depth(results['depth_0'][0]*masks['level_0'][0])
                 prob = visualize_prob(results['confidence_0'][0]*masks['level_0'][0])
                 
+
                 stack = torch.stack([depth_gt_, depth_pred_, prob]) # (4, 3, H, W)
                 self.logger.experiment.add_images('train/image_GT_pred_prob',
                                                   stack, self.global_step)
-
+                # define original depth prediction
+                try:
+                    depth_ori = original_results['depth_0'][0]*masks['level_0'][0]
+                    depth_ori = visualize_depth(depth_ori)
+                
+                    prob_ori = visualize_prob(original_results['confidence_0'][0]*masks['level_0'][0])
+                    stack_ori = torch.stack([depth_gt_, depth_ori, prob_ori])
+                    self.logger.experiment.add_images('train/image_GT_ori_prob',
+                                                        stack_ori, self.global_step)
+                except:
+                    print("original_depth_failed")
+                
+                
+        self.log_dict(log, on_step=True, on_epoch=True, prog_bar=True, logger=True)
 
             
             
@@ -232,7 +299,7 @@ class MVSSystem(LightningModule):
         results = self.depth_model(outputs, proj_mats, init_depth_min, depth_interval)
         log['val_loss'] = self.depth_loss(results, depths, masks)
     
-        if batch_nb == 0:
+        if batch_nb%50 == 0:
             img_ = imgs[0,0].cpu() # batch 0, ref image
             depth_gt_ = visualize_depth(depths['level_0'][0])
             depth_pred_ = visualize_depth(results['depth_0'][0]*masks['level_0'][0])
@@ -246,10 +313,16 @@ class MVSSystem(LightningModule):
         mask = masks['level_0']
 
         log['val_abs_err'] = abs_error(depth_pred, depth_gt, mask).sum()
-        log['val_acc_1mm'] = acc_threshold(depth_pred, depth_gt, mask, 1).sum()
-        log['val_acc_2mm'] = acc_threshold(depth_pred, depth_gt, mask, 2).sum()
-        log['val_acc_4mm'] = acc_threshold(depth_pred, depth_gt, mask, 4).sum()
+        log['val_acc_1mm'] = acc_threshold(depth_pred, depth_gt, mask, 1).sum() 
+        log['val_acc_2mm'] = acc_threshold(depth_pred, depth_gt, mask, 2).sum() 
+        log['val_acc_4mm'] = acc_threshold(depth_pred, depth_gt, mask, 4).sum() 
         log['mask_sum'] = mask.float().sum()
+        self.log_dict(log, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.logger.experiment.add_scalar('val/loss', log['val_loss'].mean(), self.global_step)
+        self.logger.experiment.add_scalar('val/abs_err', log['val_abs_err'] /log['mask_sum'], self.global_step)
+        self.logger.experiment.add_scalar('val/acc_1mm', log['val_acc_1mm']/log['mask_sum'], self.global_step)
+        self.logger.experiment.add_scalar('val/acc_2mm', log['val_acc_2mm']/log['mask_sum'], self.global_step)
+        self.logger.experiment.add_scalar('val/acc_4mm', log['val_acc_4mm']/log['mask_sum'], self.global_step)
 
         return log
 
@@ -260,6 +333,12 @@ class MVSSystem(LightningModule):
         mean_acc_1mm = torch.stack([x['val_acc_1mm'] for x in outputs]).sum() / mask_sum
         mean_acc_2mm = torch.stack([x['val_acc_2mm'] for x in outputs]).sum() / mask_sum
         mean_acc_4mm = torch.stack([x['val_acc_4mm'] for x in outputs]).sum() / mask_sum
+        self.log('val/loss', mean_loss, on_epoch=True, prog_bar=True, logger=True)
+        self.log('val/abs_err', mean_abs_err, on_epoch=True, prog_bar=True, logger=True)
+        self.log('val/acc_1mm', mean_acc_1mm, on_epoch=True, prog_bar=True, logger=True)
+        self.log('val/acc_2mm', mean_acc_2mm, on_epoch=True, prog_bar=True, logger=True)
+        self.log('val/acc_4mm', mean_acc_4mm, on_epoch=True, prog_bar=True, logger=True)
+
 
         return {'progress_bar': {'val_loss': mean_loss,
                                  'val_abs_err': mean_abs_err},
@@ -301,7 +380,7 @@ if __name__ == '__main__':
                         help='number of groups in groupwise correlation, must be a divisor of 8')
         parser.add_argument("--config", default='/openbayes/input/input0/Diffusion/configs/DTU2.yml', type=str,
                             help="Path to the config file")
-        parser.add_argument('--resume', default='/openbayes/input/input0/model.pth.tar', type=str,
+        parser.add_argument('--resume', default='/openbayes/input/input0/Diffusion/enhancer/provided_enhancer/model.pth.tar', type=str,
                             help='Path for checkpoint to load and resume')
         parser.add_argument("--optimizer", default='adam', type=str,)
         parser.add_argument("--lr_scheduler", default='steplr', type=str,)
@@ -327,38 +406,46 @@ if __name__ == '__main__':
 
         return args, new_config
     args, config = parse_args_and_config()
+
     system = MVSSystem( args, config)
-    checkpoint_callback = ModelCheckpoint(filepath=os.path.join(f'ckpts/{config.logger.exp_name}',
-                                                                '{epoch:02d}'),
+    checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(f'ckpts/{config.logger.exp_name}','version_encoder'),
                                           monitor='val/acc_2mm',
                                           mode='max',
+                                          every_n_epochs=1.0,
                                           save_top_k=5,)
-
+    
+    early_stop_callback = EarlyStopping(monitor='val/acc_2mm',
+                                        patience=10,
+                                        mode='max')  
+    lr_scheduler = LearningRateMonitor(logging_interval='step')
+    callbacks = [checkpoint_callback, lr_scheduler, early_stop_callback]
     logger = TestTubeLogger(
-        save_dir="/root/tf-logs",
+        save_dir="/openbayes/home/tf_dir",
         name=config.logger.exp_name,
         debug=False,
         create_git_tag=False
     )
-    # trainer = Trainer(max_epochs=hparams.num_epochs,
-    #                   callbacks=[checkpoint_callback],
-    #                   logger=logger,
-    #                   gpus= 1,
-    #                   strategy = "ddp",
-    #                   num_sanity_val_steps=0,
-    #                   check_val_every_n_epoch=1,
-    #                   precision=16)
     trainer = Trainer(max_epochs=args.num_epochs,
-                      checkpoint_callback=checkpoint_callback,
+                      callbacks=callbacks,
                       logger=logger,
-                      early_stop_callback=None,
-                      weights_summary=None,
-                      progress_bar_refresh_rate=1,
-                      gpus=args.num_gpus,
-                      distributed_backend='ddp' if args.num_gpus>1 else None,
-                      num_sanity_val_steps=0 if args.num_gpus>1 else 5,
-                      benchmark=True,
-                      precision= 32,
-                      amp_level='O1')
-
+                      gpus= 2,
+                      strategy = "ddp",
+                      num_sanity_val_steps=1,
+                      check_val_every_n_epoch=1,
+                      
+                      
+                      precision=16)
+    # trainer = Trainer(max_epochs=args.num_epochs,
+    #                   checkpoint_callback=checkpoint_callback,
+    #                   logger=logger,
+    #                   early_stop_callback=None,
+    #                   weights_summary=None,
+    #                   progress_bar_refresh_rate=1,
+    #                   gpus=args.num_gpus,
+    #                   distributed_backend='ddp' if args.num_gpus>1 else None,
+    #                   num_sanity_val_steps=0 if args.num_gpus>1 else 3,
+    #                   benchmark=True,
+    #                   precision= 16,
+    #                   amp_level='O1')
+    system.prepare_data()
     trainer.fit(system)

@@ -10,7 +10,7 @@ data:
     # ckpt_dir: "/root/autodl-tmp/Diffusion/ckpt/lora_version"
     # conditional: True
     # split_path: "/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/datasets/lists/"
-    type: "DTUDataset"
+    type: "dtu2" #"DTUDataset"
     train_dataset: "train.txt"
     val_dataset: "test.txt"
     single_frame: False
@@ -47,16 +47,16 @@ model:
     ema: True
     resamp_with_conv: True
 logger:
-    exp_name: "feature_extraction_depth_refine"
+    exp_name: "use_trained_extraction_depth_refine_zero_init"
     logger_path: "/openbayes/home/tf_dir"
 diffusion:
     beta_schedule: linear
     beta_start: 0.0001
     beta_end: 0.02
-    num_diffusion_timesteps: 20
+    num_diffusion_timesteps: 200
 device: 'cuda'
 training:
-    batch_size: 3
+    batch_size: 4
     n_epochs: 50
     validation_freq: 1000
 
@@ -65,7 +65,7 @@ type:
     num_epochs: 10
     decay_gamma: 0.4
     optimizer: "adam"
-    lr: 0.001
+    lr: 0.0001
     amsgrad: False
     eps: 0.00000001
     step_size: 50

@@ -13,16 +13,44 @@ class FeatureNetIdw(nn.Module):
         self.conv0 = nn.Sequential(
                         ConvBnReLU(3, 8, 3, 1, 1, norm_act=norm_act),
                         ConvBnReLU(8, 8, 3, 1, 1, norm_act=norm_act))
-
-        self.conv1 = nn.Sequential(
+        self.conv0_1 =  nn.Sequential(
+                        ConvBnReLU(3, 8, 3, 1, 1, norm_act=norm_act),
+                        ConvBnReLU(8, 8, 3, 1, 1, norm_act=norm_act))
+        # zero init conv0_1
+        
+        
+        self.conv1_1 = nn.Sequential(
                         ConvBnReLU(12, 16, 5, 1, 2, norm_act=norm_act),
+                        ConvBnReLU(16, 16, 3, 1, 1, norm_act=norm_act),
+                        ConvBnReLU(16, 16, 3, 1, 1, norm_act=norm_act))
+        self.conv1 = nn.Sequential(
+                        ConvBnReLU(8, 16, 5, 2, 2, norm_act=norm_act),
                         ConvBnReLU(16, 16, 3, 1, 1, norm_act=norm_act),
                         ConvBnReLU(16, 16, 3, 1, 1, norm_act=norm_act))
 
         self.conv2 = nn.Sequential( 
+                        ConvBnReLU(16, 32, 5, 2, 2, norm_act=norm_act),
+                        ConvBnReLU(32, 32, 3, 1, 1, norm_act=norm_act),
+                        ConvBnReLU(32, 32, 3, 1, 1, norm_act=norm_act))
+        self.conv2_1 = nn.Sequential( 
                         ConvBnReLU(12, 32, 5, 1, 2, norm_act=norm_act),
                         ConvBnReLU(32, 32, 3, 1, 1, norm_act=norm_act),
                         ConvBnReLU(32, 32, 3, 1, 1, norm_act=norm_act))
+        for m in self.conv0_1.modules():
+            if isinstance(m, nn.Conv2d):
+                m.weight.data.zero_()
+                if m.bias is not None:
+                    m.bias.data.zero_()
+        for m in self.conv2_1.modules():
+            if isinstance(m, nn.Conv2d):
+                m.weight.data.zero_()
+                if m.bias is not None:
+                    m.bias.data.zero_()
+        for m in self.conv1_1.modules():
+            if isinstance(m, nn.Conv2d):
+                m.weight.data.zero_()
+                if m.bias is not None:
+                    m.bias.data.zero_()
 
         self.toplayer = nn.Conv2d(32, 32, 1)
         self.lat1 = nn.Conv2d(16, 32, 1)
@@ -37,13 +65,26 @@ class FeatureNetIdw(nn.Module):
                              mode="bilinear", align_corners=True) + y
 
     def forward(self, x):
-        conv0= x["pred_x"]
-        conv1 = x["middle_feature"]
-        conv2 = x["low_feature"]
+        pred_x= x["pred_x"]
+        middle_feature = x["middle_feature"]
+        low_feature = x["low_feature"]
+        img = x["img"]
+        B, V, _, H, W = img.shape
+        
+
+        img = img.reshape(B*V, 3, H, W)
         # x: (B, 3, H, W)
-        conv0 = self.conv0(conv0) # (B, 8, H, W)
+        conv0 = self.conv0(img) # (B, 8, H, W)
+        conv0_1 = self.conv0_1(pred_x) # (B, 8, H, W)
+        conv1=conv0_1+conv0
+        conv1_1 = self.conv1_1(middle_feature) # (B, 16, H//2, W//2)
         conv1 = self.conv1(conv1) # (B, 16, H//2, W//2)
+        conv2 = conv1+conv1_1
         conv2 = self.conv2(conv2) # (B, 32, H//4, W//4)
+        conv2_1 = self.conv2_1(low_feature) # (B, 32, H//4, W//4)
+       
+        conv2=conv2_1+conv2
+        
         feat2 = self.toplayer(conv2) # (B, 32, H//4, W//4)
         
         feat1 = self._upsample_add(feat2, self.lat1(conv1)) # (B, 32, H//2, W//2)

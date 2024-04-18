@@ -221,7 +221,7 @@ class DTUDataset(Dataset):
                 gamma = np.random.uniform(2, 5)
                 img = T.functional.adjust_gamma(img, gamma)
                 sigmoidB = np.random.uniform(0, 1)
-                sigmoid = np.sqrt(sigmoidB*(25/255)**2)
+                sigmoid = np.sqrt(sigmoidB*(25/(255*255))**2)
 
                 
                 
@@ -229,10 +229,13 @@ class DTUDataset(Dataset):
             img = self.transform(img)
 
             if self.train_on_dark:
-                gaussian_noise = torch.normal(img, sigmoid,)
+                gaussian_noise = torch.normal(torch.zeros_like(imgs_gt[-1]), sigmoid,)
                 imgs_noisy = img + gaussian_noise
             
                 img = imgs_noisy
+
+                img = torch.clamp(img, 0, 1)
+                
             
 
        
@@ -268,7 +271,12 @@ class DTUDataset(Dataset):
         sample['scan_vid'] = (scan, ref_view)
 
         return sample
-
+class DTUDataset2(DTUDataset):
+    def __init__(self, root_dir, split, n_views=3, levels=3, depth_interval=2.65,
+                 img_wh=None,train_on_dark = True,train_refine= False,refine_patch = 256):
+        super().__init__(root_dir, split, n_views, levels, depth_interval,
+                         img_wh, False,train_refine,refine_patch)
+        
 
 class DTURefine(Dataset):
     def __init__(self, root_dir, split, n_views=3, levels=3, depth_interval=2.65,
@@ -296,7 +304,7 @@ class DTURefine(Dataset):
 
     def build_metas(self):
         self.metas = []
-        with open(f'/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}.txt') as f:
+        with open(f'/openbayes/input/input0/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}.txt') as f:
             self.scans = [line.rstrip() for line in f.readlines()]
 
         # light conditions 0-6 for training
@@ -534,7 +542,7 @@ class DTURefine(Dataset):
         sample['proj_mats'] = proj_mats
         sample['depth_interval'] = torch.FloatTensor([self.depth_interval])
         sample['scan_vid'] = (scan, ref_view)
-
+        
         return sample
 
 
