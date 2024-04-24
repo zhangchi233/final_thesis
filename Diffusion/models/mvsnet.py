@@ -3,6 +3,117 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from .modules import *
+class FeatureNetablation1(nn.Module):
+    def __init__(self, norm_act=InPlaceABN):
+        super(FeatureNetablation1, self).__init__()
+
+        self.conv0 = nn.Sequential(
+                        ConvBnReLU(3, 8, 3, 1, 1, norm_act=norm_act),
+                        ConvBnReLU(8, 8, 3, 1, 1, norm_act=norm_act),
+                        )
+        self.conv0_1 =  nn.Sequential(
+                        ConvBnReLU(6, 8, 3, 1, 1, norm_act=norm_act),
+                        ConvBnReLU(8, 8, 3, 1, 1, norm_act=norm_act),
+                        nn.Conv2d(8, 8, 1, 1, ))
+        # zero init conv0_1
+        
+        
+        self.conv1_1 = nn.Sequential(
+                        ConvBnReLU(11, 16, 5, 2, 2, norm_act=norm_act),
+                        ConvBnReLU(16, 16, 3, 1, 1, norm_act=norm_act),
+                        ConvBnReLU(16, 16, 3, 1, 1, norm_act=norm_act),
+                        nn.Conv2d(16, 16, 1, 1, ))
+        self.conv1 = nn.Sequential(
+                        ConvBnReLU(8, 16, 5, 2, 2, norm_act=norm_act),
+                        ConvBnReLU(16, 16, 3, 1, 1, norm_act=norm_act),
+                        ConvBnReLU(16, 16, 3, 1, 1, norm_act=norm_act),
+                        )
+
+        self.conv2 = nn.Sequential( 
+                        ConvBnReLU(16, 32, 5, 2, 2, norm_act=norm_act),
+                        ConvBnReLU(32, 32, 3, 1, 1, norm_act=norm_act),
+                        ConvBnReLU(32, 32, 3, 1, 1, norm_act=norm_act))
+        self.conv2_1 = nn.Sequential( 
+                        ConvBnReLU(19, 32, 5, 2, 2, norm_act=norm_act),
+                        ConvBnReLU(32, 32, 3, 1, 1, norm_act=norm_act),
+                        ConvBnReLU(32, 32, 3, 1, 1, norm_act=norm_act),
+                        nn.Conv2d(32, 32, 1, 1, ))
+        for m in self.conv0_1.modules():
+            if isinstance(m, nn.Conv2d):
+                m.weight.data.zero_()
+                if m.bias is not None:
+                    m.bias.data.zero_()
+        for m in self.conv2_1.modules():
+            if isinstance(m, nn.Conv2d):
+                m.weight.data.zero_()
+                if m.bias is not None:
+                    m.bias.data.zero_()
+        for m in self.conv1_1.modules():
+            if isinstance(m, nn.Conv2d):
+                m.weight.data.zero_()
+                if m.bias is not None:
+                    m.bias.data.zero_()
+
+        self.toplayer = nn.Conv2d(32, 32, 1)
+        self.lat1 = nn.Conv2d(16, 32, 1)
+        self.lat0 = nn.Conv2d(8, 32, 1)
+
+        # to reduce channel size of the outputs from FPN
+        self.smooth1 = nn.Conv2d(32, 16, 3, padding=1)
+        self.smooth0 = nn.Conv2d(32, 8, 3, padding=1)
+
+    def _upsample_add(self, x, y):
+        return F.interpolate(x, scale_factor=2, 
+                             mode="bilinear", align_corners=True) + y
+
+    def forward(self, x):
+        
+
+        
+        img = x["img"]
+       
+        B, V, _, H, W = img.shape
+        img = img.reshape(B*V, 3, H, W)
+        low_feature = F.interpolate(img, scale_factor=0.5, mode='bilinear', align_corners=False)
+        middle_feature = img
+        # x: (B, 3, H, W)
+        conv0 = self.conv0(img) # (B, 8, H, W)
+
+        first_layer_input = torch.cat([img,img],dim=1)
+        conv0_1 = self.conv0_1(first_layer_input) # (B, 8, H, W)
+        conv1=conv0_1+conv0
+
+        
+        middle_feature = torch.cat([middle_feature, conv0_1], dim=1)
+        conv1_1 = self.conv1_1(middle_feature) # (B, 16, H//2, W//2)
+        conv1 = self.conv1(conv1) # (B, 16, H//2, W//2)
+        conv2 = conv1+conv1_1
+        
+
+        
+        low_feature = torch.cat([low_feature, conv1_1], dim=1)
+        conv2 = self.conv2(conv2) # (B, 32, H//4, W//4)
+        conv2_1 = self.conv2_1(low_feature) # (B, 32, H//4, W//4)
+       
+        conv2=conv2_1+conv2
+        
+        feat2 = self.toplayer(conv2) # (B, 32, H//4, W//4)
+        
+        feat1 = self._upsample_add(feat2, self.lat1(conv1)) # (B, 32, H//2, W//2)
+        
+        feat0 = self._upsample_add(feat1, self.lat0(conv0)) # (B, 32, H, W)
+
+        # reduce output channels
+        feat1 = self.smooth1(feat1) # (B, 16, H//2, W//2)
+        feat0 = self.smooth0(feat0) # (B, 8, H, W)
+
+        feats = {"level_0": feat0,
+                 "level_1": feat1,
+                 "level_2": feat2}
+
+        return feats
+
+
 class FeatureNetIdw(nn.Module):
     """
     output 3 levels of features using a FPN structure
@@ -498,3 +609,13 @@ class CascadeMVSNet(nn.Module):
             
 
         return results
+class CascadeMVSNetablation1(CascadeMVSNetIDW):
+    def __init__(self, n_depths=[8, 32, 48],
+                       interval_ratios=[1, 2, 4],
+                       num_groups=1,
+                       norm_act=InPlaceABN):
+        super().__init__(n_depths, interval_ratios, num_groups, norm_act)
+        self.feature = FeatureNetablation1(norm_act)
+    
+    
+

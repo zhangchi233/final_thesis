@@ -47,7 +47,7 @@ model:
     ema: True
     resamp_with_conv: True
 logger:
-    exp_name: "our_proposed"
+    exp_name: "only_adapter"
     logger_path: "/workspace/tf-logs"
 diffusion:
     beta_schedule: linear

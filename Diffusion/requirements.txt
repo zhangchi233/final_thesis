@@ -2,7 +2,7 @@ astunparse==1.6.3
 boto3==1.18.47
 botocore==1.21.47
 cffi
-coloredlogs==15.0
+coloredlogs
 configargparse
 cupy-cuda102==7.8.0
 cvxpy==1.1.18

@@ -31,7 +31,7 @@ class DTUDataset(Dataset):
 
     def build_metas(self):
         self.metas = []
-        with open(f'/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}.txt') as f:
+        with open(f'/workspace/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}.txt') as f:
             self.scans = [line.rstrip() for line in f.readlines()]
 
         # light conditions 0-6 for training
