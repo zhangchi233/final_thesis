@@ -12,30 +12,35 @@ class FeatureNetIdw(nn.Module):
 
         self.conv0 = nn.Sequential(
                         ConvBnReLU(3, 8, 3, 1, 1, norm_act=norm_act),
-                        ConvBnReLU(8, 8, 3, 1, 1, norm_act=norm_act))
+                        ConvBnReLU(8, 8, 3, 1, 1, norm_act=norm_act),
+                        )
         self.conv0_1 =  nn.Sequential(
-                        ConvBnReLU(3, 8, 3, 1, 1, norm_act=norm_act),
-                        ConvBnReLU(8, 8, 3, 1, 1, norm_act=norm_act))
+                        ConvBnReLU(3+3, 8, 3, 1, 1, norm_act=norm_act),
+                        ConvBnReLU(8, 8, 3, 1, 1, norm_act=norm_act),
+                        nn.Conv2d(8, 8, 1, 1, ))
         # zero init conv0_1
         
         
         self.conv1_1 = nn.Sequential(
-                        ConvBnReLU(12, 16, 5, 1, 2, norm_act=norm_act),
+                        ConvBnReLU(12+8, 16, 5, 2, 2, norm_act=norm_act),
                         ConvBnReLU(16, 16, 3, 1, 1, norm_act=norm_act),
-                        ConvBnReLU(16, 16, 3, 1, 1, norm_act=norm_act))
+                        ConvBnReLU(16, 16, 3, 1, 1, norm_act=norm_act),
+                        nn.Conv2d(16, 16, 1, 1, ))
         self.conv1 = nn.Sequential(
                         ConvBnReLU(8, 16, 5, 2, 2, norm_act=norm_act),
                         ConvBnReLU(16, 16, 3, 1, 1, norm_act=norm_act),
-                        ConvBnReLU(16, 16, 3, 1, 1, norm_act=norm_act))
+                        ConvBnReLU(16, 16, 3, 1, 1, norm_act=norm_act),
+                        )
 
         self.conv2 = nn.Sequential( 
                         ConvBnReLU(16, 32, 5, 2, 2, norm_act=norm_act),
                         ConvBnReLU(32, 32, 3, 1, 1, norm_act=norm_act),
                         ConvBnReLU(32, 32, 3, 1, 1, norm_act=norm_act))
         self.conv2_1 = nn.Sequential( 
-                        ConvBnReLU(12, 32, 5, 1, 2, norm_act=norm_act),
+                        ConvBnReLU(12+16, 32, 5, 2, 2, norm_act=norm_act),
                         ConvBnReLU(32, 32, 3, 1, 1, norm_act=norm_act),
-                        ConvBnReLU(32, 32, 3, 1, 1, norm_act=norm_act))
+                        ConvBnReLU(32, 32, 3, 1, 1, norm_act=norm_act),
+                        nn.Conv2d(32, 32, 1, 1, ))
         for m in self.conv0_1.modules():
             if isinstance(m, nn.Conv2d):
                 m.weight.data.zero_()
@@ -66,6 +71,7 @@ class FeatureNetIdw(nn.Module):
 
     def forward(self, x):
         pred_x= x["pred_x"]
+
         middle_feature = x["middle_feature"]
         low_feature = x["low_feature"]
         img = x["img"]
@@ -75,11 +81,19 @@ class FeatureNetIdw(nn.Module):
         img = img.reshape(B*V, 3, H, W)
         # x: (B, 3, H, W)
         conv0 = self.conv0(img) # (B, 8, H, W)
-        conv0_1 = self.conv0_1(pred_x) # (B, 8, H, W)
+
+        first_layer_input = torch.cat([img,pred_x],dim=1)
+        conv0_1 = self.conv0_1(first_layer_input) # (B, 8, H, W)
         conv1=conv0_1+conv0
+
+        middle_feature = F.interpolate(middle_feature, scale_factor=2, mode='bilinear', align_corners=False)
+        middle_feature = torch.cat([middle_feature, conv0_1], dim=1)
         conv1_1 = self.conv1_1(middle_feature) # (B, 16, H//2, W//2)
         conv1 = self.conv1(conv1) # (B, 16, H//2, W//2)
         conv2 = conv1+conv1_1
+        
+        low_feature = F.interpolate(low_feature, scale_factor=2, mode='bilinear', align_corners=False)
+        low_feature = torch.cat([low_feature, conv1_1], dim=1)
         conv2 = self.conv2(conv2) # (B, 32, H//4, W//4)
         conv2_1 = self.conv2_1(low_feature) # (B, 32, H//4, W//4)
        
@@ -301,9 +315,8 @@ class CascadeMVSNetIDW(nn.Module):
         #imgs = imgs.reshape(B*V, 3, H, W)
         
         
-        B, _, H, W =imgs["low_feature"].shape
-        B//=3
-        V = 3
+        B,V,C, H, W =imgs["img"].shape
+       
 
         feats = self.feature(imgs) # (B*V, 8, H, W), (B*V, 16, H//2, W//2), (B*V, 32, H//4, W//4)
         

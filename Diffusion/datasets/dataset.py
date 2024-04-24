@@ -287,21 +287,16 @@ class DTUDataset(Dataset):
         imgs = torch.stack(imgs) # (V, 3, H, W)
         proj_mats = torch.stack(proj_mats)[:,:,:3] # (V-1, self.levels, 3, 4) from fine to coarse
         
-        gamma = np.random.uniform(2, 5)
-        imgs_dark = T.functional.adjust_gamma(imgs, gamma)
-        sigmoidB = np.random.uniform(0, 1)
-        sigmoid = np.sqrt(sigmoidB*(25/255)**2)
-        
-        gaussian_noise = torch.normal(mean = imgs_dark, std = sigmoid,)
-        imgs_noisy = imgs_dark + gaussian_noise
-        imgs_noisy = torch.clamp(imgs_noisy, 0, 1)
 
-        imgs = self.transform2(imgs)
-        imgs_noisy = self.transform2(imgs_noisy)
+        
+        
+
+     
+        
         
         sample['cams'] = cams
         sample['imgs_gt'] = imgs
-        sample["imgs"] = imgs_noisy
+        sample["imgs"] = imgs
         sample['proj_mats'] = proj_mats
         sample['depth_interval'] = torch.FloatTensor([self.depth_interval])
         sample['scan_vid'] = (scan, ref_view)

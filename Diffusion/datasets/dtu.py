@@ -31,7 +31,7 @@ class DTUDataset(Dataset):
 
     def build_metas(self):
         self.metas = []
-        with open(f'/openbayes/input/input0/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}.txt') as f:
+        with open(f'/root/autodl-tmp/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}.txt') as f:
             self.scans = [line.rstrip() for line in f.readlines()]
 
         # light conditions 0-6 for training
@@ -216,29 +216,8 @@ class DTUDataset(Dataset):
             if self.img_wh is not None:
                 img = img.resize(self.img_wh, Image.BILINEAR)
             imgs_gt +=[self.transform(img.copy())]
-            if self.train_on_dark:
-              
-                gamma = np.random.uniform(2, 5)
-                img = T.functional.adjust_gamma(img, gamma)
-                sigmoidB = np.random.uniform(0, 1)
-                sigmoid = np.sqrt(sigmoidB*(25/(255*255))**2)
-
-                
-                
-                
             img = self.transform(img)
-
-            if self.train_on_dark:
-                gaussian_noise = torch.normal(torch.zeros_like(imgs_gt[-1]), sigmoid,)
-                imgs_noisy = img + gaussian_noise
-            
-                img = imgs_noisy
-
-                img = torch.clamp(img, 0, 1)
-                
-            
-
-       
+          
             imgs += [img]
 
             proj_mat_ls, depth_min,cam = self.proj_mats[vid]
@@ -271,279 +250,279 @@ class DTUDataset(Dataset):
         sample['scan_vid'] = (scan, ref_view)
 
         return sample
-class DTUDataset2(DTUDataset):
-    def __init__(self, root_dir, split, n_views=3, levels=3, depth_interval=2.65,
-                 img_wh=None,train_on_dark = True,train_refine= False,refine_patch = 256):
-        super().__init__(root_dir, split, n_views, levels, depth_interval,
-                         img_wh, False,train_refine,refine_patch)
+# class DTUDataset2(DTUDataset):
+#     def __init__(self, root_dir, split, n_views=3, levels=3, depth_interval=2.65,
+#                  img_wh=None,train_on_dark = True,train_refine= False,refine_patch = 256):
+#         super().__init__(root_dir, split, n_views, levels, depth_interval,
+#                          img_wh, False,train_refine,refine_patch)
         
 
-class DTURefine(Dataset):
-    def __init__(self, root_dir, split, n_views=3, levels=3, depth_interval=2.65,
-                 img_wh=None,train_on_dark = True,train_refine= False,refine_patch = 256):
-        """
-        img_wh should be set to a tuple ex: (1152, 864) to enable test mode!
+# class DTURefine(Dataset):
+#     def __init__(self, root_dir, split, n_views=3, levels=3, depth_interval=2.65,
+#                  img_wh=None,train_on_dark = True,train_refine= False,refine_patch = 256):
+#         """
+#         img_wh should be set to a tuple ex: (1152, 864) to enable test mode!
     
-        """
-        self.patch_size = refine_patch
-        self.train_on_dark = train_on_dark
-        self.root_dir = root_dir
-        self.split = split
-        assert self.split in ['train', 'val', 'test'], \
-            'split must be either "train", "val" or "test"!'
-        self.img_wh = img_wh
-        if img_wh is not None:
-            assert img_wh[0]%32==0 and img_wh[1]%32==0, \
-                'img_wh must both be multiples of 32!'
-        self.build_metas()
-        self.n_views = n_views
-        self.levels = levels # FPN levels
-        self.depth_interval = depth_interval
-        self.build_proj_mats()
-        self.define_transforms()
+#         """
+#         self.patch_size = refine_patch
+#         self.train_on_dark = train_on_dark
+#         self.root_dir = root_dir
+#         self.split = split
+#         assert self.split in ['train', 'val', 'test'], \
+#             'split must be either "train", "val" or "test"!'
+#         self.img_wh = img_wh
+#         if img_wh is not None:
+#             assert img_wh[0]%32==0 and img_wh[1]%32==0, \
+#                 'img_wh must both be multiples of 32!'
+#         self.build_metas()
+#         self.n_views = n_views
+#         self.levels = levels # FPN levels
+#         self.depth_interval = depth_interval
+#         self.build_proj_mats()
+#         self.define_transforms()
 
-    def build_metas(self):
-        self.metas = []
-        with open(f'/openbayes/input/input0/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}.txt') as f:
-            self.scans = [line.rstrip() for line in f.readlines()]
+#     def build_metas(self):
+#         self.metas = []
+#         with open(f'/openbayes/input/input0/project/dp_simple/CasMVSNet_pl/datasets/lists/dtu/{self.split}.txt') as f:
+#             self.scans = [line.rstrip() for line in f.readlines()]
 
-        # light conditions 0-6 for training
-        # light condition 3 for testing (the brightest?)
-        light_idxs = list(range(7))
+#         # light conditions 0-6 for training
+#         # light condition 3 for testing (the brightest?)
+#         light_idxs = list(range(7))
 
-        pair_file = "Cameras/pair.txt"
-        for scan in self.scans:
-            with open(os.path.join(self.root_dir, pair_file)) as f:
-                num_viewpoint = int(f.readline())
-                # viewpoints (49)
-                for _ in range(num_viewpoint):
-                    ref_view = int(f.readline().rstrip())
-                    src_views = [int(x) for x in f.readline().rstrip().split()[1::2]]
-                    for light_idx in light_idxs:
-                        self.metas += [(scan, light_idx, ref_view, src_views)]
+#         pair_file = "Cameras/pair.txt"
+#         for scan in self.scans:
+#             with open(os.path.join(self.root_dir, pair_file)) as f:
+#                 num_viewpoint = int(f.readline())
+#                 # viewpoints (49)
+#                 for _ in range(num_viewpoint):
+#                     ref_view = int(f.readline().rstrip())
+#                     src_views = [int(x) for x in f.readline().rstrip().split()[1::2]]
+#                     for light_idx in light_idxs:
+#                         self.metas += [(scan, light_idx, ref_view, src_views)]
 
-    def build_proj_mats(self):
-        proj_mats = []
-        for vid in range(49): # total 49 view ids
-            if self.img_wh is None:
-                proj_mat_filename = os.path.join(self.root_dir,
-                                                 f'Cameras/train/{vid:08d}_cam.txt')
-            else:
-                proj_mat_filename = os.path.join(self.root_dir,
-                                                 f'Cameras/{vid:08d}_cam.txt')
-            intrinsics, extrinsics, depth_min = \
-                self.read_cam_file(proj_mat_filename)
-            if self.img_wh is not None: # resize the intrinsics to the coarsest level
-                intrinsics[0] *= self.img_wh[0]/1600/4
-                intrinsics[1] *= self.img_wh[1]/1200/4
+#     def build_proj_mats(self):
+#         proj_mats = []
+#         for vid in range(49): # total 49 view ids
+#             if self.img_wh is None:
+#                 proj_mat_filename = os.path.join(self.root_dir,
+#                                                  f'Cameras/train/{vid:08d}_cam.txt')
+#             else:
+#                 proj_mat_filename = os.path.join(self.root_dir,
+#                                                  f'Cameras/{vid:08d}_cam.txt')
+#             intrinsics, extrinsics, depth_min = \
+#                 self.read_cam_file(proj_mat_filename)
+#             if self.img_wh is not None: # resize the intrinsics to the coarsest level
+#                 intrinsics[0] *= self.img_wh[0]/1600/4
+#                 intrinsics[1] *= self.img_wh[1]/1200/4
 
-            # multiply intrinsics and extrinsics to get projection matrix
-            proj_mat_ls = []
-            for l in reversed(range(self.levels)):
-                proj_mat_l = np.eye(4)
-                proj_mat_l[:3, :4] = intrinsics @ extrinsics[:3, :4]
-                intrinsics[:2] *= 2 # 1/4->1/2->1
-                proj_mat_ls += [torch.FloatTensor(proj_mat_l)]
-            # (self.levels, 4, 4) from fine to coarse
-            proj_mat_ls = torch.stack(proj_mat_ls[::-1])
-            cam = self.load_cam(open(proj_mat_filename, "r"))
-            proj_mats += [(proj_mat_ls, depth_min,cam)]
+#             # multiply intrinsics and extrinsics to get projection matrix
+#             proj_mat_ls = []
+#             for l in reversed(range(self.levels)):
+#                 proj_mat_l = np.eye(4)
+#                 proj_mat_l[:3, :4] = intrinsics @ extrinsics[:3, :4]
+#                 intrinsics[:2] *= 2 # 1/4->1/2->1
+#                 proj_mat_ls += [torch.FloatTensor(proj_mat_l)]
+#             # (self.levels, 4, 4) from fine to coarse
+#             proj_mat_ls = torch.stack(proj_mat_ls[::-1])
+#             cam = self.load_cam(open(proj_mat_filename, "r"))
+#             proj_mats += [(proj_mat_ls, depth_min,cam)]
 
-        self.proj_mats = proj_mats
+#         self.proj_mats = proj_mats
 
-    def read_cam_file(self, filename):
-        with open(filename) as f:
-            lines = [line.rstrip() for line in f.readlines()]
-        # extrinsics: line [1,5), 4x4 matrix
-        extrinsics = np.fromstring(' '.join(lines[1:5]), dtype=np.float32, sep=' ')
-        extrinsics = extrinsics.reshape((4, 4))
-        # intrinsics: line [7-10), 3x3 matrix
-        intrinsics = np.fromstring(' '.join(lines[7:10]), dtype=np.float32, sep=' ')
-        intrinsics = intrinsics.reshape((3, 3))
-        # depth_min & depth_interval: line 11
-        depth_min = float(lines[11].split()[0])
-        return intrinsics, extrinsics, depth_min
+#     def read_cam_file(self, filename):
+#         with open(filename) as f:
+#             lines = [line.rstrip() for line in f.readlines()]
+#         # extrinsics: line [1,5), 4x4 matrix
+#         extrinsics = np.fromstring(' '.join(lines[1:5]), dtype=np.float32, sep=' ')
+#         extrinsics = extrinsics.reshape((4, 4))
+#         # intrinsics: line [7-10), 3x3 matrix
+#         intrinsics = np.fromstring(' '.join(lines[7:10]), dtype=np.float32, sep=' ')
+#         intrinsics = intrinsics.reshape((3, 3))
+#         # depth_min & depth_interval: line 11
+#         depth_min = float(lines[11].split()[0])
+#         return intrinsics, extrinsics, depth_min
 
-    def read_depth(self, filename):
-        depth = np.array(read_pfm(filename)[0], dtype=np.float32) # (1200, 1600)
-        if self.img_wh is None:
-            depth = cv2.resize(depth, None, fx=0.5, fy=0.5,
-                            interpolation=cv2.INTER_NEAREST) # (600, 800)
-            depth_0 = depth[44:556, 80:720] # (512, 640)
-        else:
-            depth_0 = cv2.resize(depth, self.img_wh,
-                                 interpolation=cv2.INTER_NEAREST)
-        depth_1 = cv2.resize(depth_0, None, fx=0.5, fy=0.5,
-                             interpolation=cv2.INTER_NEAREST)
-        depth_2 = cv2.resize(depth_1, None, fx=0.5, fy=0.5,
-                             interpolation=cv2.INTER_NEAREST)
+#     def read_depth(self, filename):
+#         depth = np.array(read_pfm(filename)[0], dtype=np.float32) # (1200, 1600)
+#         if self.img_wh is None:
+#             depth = cv2.resize(depth, None, fx=0.5, fy=0.5,
+#                             interpolation=cv2.INTER_NEAREST) # (600, 800)
+#             depth_0 = depth[44:556, 80:720] # (512, 640)
+#         else:
+#             depth_0 = cv2.resize(depth, self.img_wh,
+#                                  interpolation=cv2.INTER_NEAREST)
+#         depth_1 = cv2.resize(depth_0, None, fx=0.5, fy=0.5,
+#                              interpolation=cv2.INTER_NEAREST)
+#         depth_2 = cv2.resize(depth_1, None, fx=0.5, fy=0.5,
+#                              interpolation=cv2.INTER_NEAREST)
 
-        depths = {"level_0": torch.FloatTensor(depth_0),
-                  "level_1": torch.FloatTensor(depth_1),
-                  "level_2": torch.FloatTensor(depth_2)}
+#         depths = {"level_0": torch.FloatTensor(depth_0),
+#                   "level_1": torch.FloatTensor(depth_1),
+#                   "level_2": torch.FloatTensor(depth_2)}
         
-        return depths
+#         return depths
 
-    def read_mask(self, filename):
-        mask = cv2.imread(filename, 0) # (1200, 1600)
+#     def read_mask(self, filename):
+#         mask = cv2.imread(filename, 0) # (1200, 1600)
        
-        if self.img_wh is None:
-            mask = cv2.resize(mask, None, fx=0.5, fy=0.5,
-                            interpolation=cv2.INTER_NEAREST) # (600, 800)
-            mask_0 = mask[44:556, 80:720] # (512, 640)
-        else:
-            mask_0 = cv2.resize(mask, self.img_wh,
-                                interpolation=cv2.INTER_NEAREST)
-        mask_1 = cv2.resize(mask_0, None, fx=0.5, fy=0.5,
-                            interpolation=cv2.INTER_NEAREST)
-        mask_2 = cv2.resize(mask_1, None, fx=0.5, fy=0.5,
-                            interpolation=cv2.INTER_NEAREST)
+#         if self.img_wh is None:
+#             mask = cv2.resize(mask, None, fx=0.5, fy=0.5,
+#                             interpolation=cv2.INTER_NEAREST) # (600, 800)
+#             mask_0 = mask[44:556, 80:720] # (512, 640)
+#         else:
+#             mask_0 = cv2.resize(mask, self.img_wh,
+#                                 interpolation=cv2.INTER_NEAREST)
+#         mask_1 = cv2.resize(mask_0, None, fx=0.5, fy=0.5,
+#                             interpolation=cv2.INTER_NEAREST)
+#         mask_2 = cv2.resize(mask_1, None, fx=0.5, fy=0.5,
+#                             interpolation=cv2.INTER_NEAREST)
 
-        masks = {"level_0": torch.BoolTensor(mask_0),
-                 "level_1": torch.BoolTensor(mask_1),
-                 "level_2": torch.BoolTensor(mask_2)}
+#         masks = {"level_0": torch.BoolTensor(mask_0),
+#                  "level_1": torch.BoolTensor(mask_1),
+#                  "level_2": torch.BoolTensor(mask_2)}
 
-        return masks
+#         return masks
 
-    def define_transforms(self):
-        if self.split=="train":
-            self.transforms = PairCompose([
-                PairRandomCrop(self.patch_size),
-                PairToTensor()
-            ])
-        else:
-            self.transforms = PairCompose([
-                PairToTensor()
-            ])
-        self.unpreprocess = T.Compose([
-            T.Normalize(mean=[0, 0, 0], std=[1/0.229, 1/0.224, 1/0.225]),
-            T.Normalize(mean=[-0.485, -0.456, -0.406], std=[1, 1, 1]),
-        ])
-    def load_cam(self, file, interval_scale=1):
-        """ read camera txt file """
-        cam = np.zeros((2, 4, 4))
-        words = file.read().split()
-        # read extrinsic
-        for i in range(0, 4):
-            for j in range(0, 4):
-                extrinsic_index = 4 * i + j + 1
-                cam[0][i][j] = words[extrinsic_index]
+#     def define_transforms(self):
+#         if self.split=="train":
+#             self.transforms = PairCompose([
+#                 PairRandomCrop(self.patch_size),
+#                 PairToTensor()
+#             ])
+#         else:
+#             self.transforms = PairCompose([
+#                 PairToTensor()
+#             ])
+#         self.unpreprocess = T.Compose([
+#             T.Normalize(mean=[0, 0, 0], std=[1/0.229, 1/0.224, 1/0.225]),
+#             T.Normalize(mean=[-0.485, -0.456, -0.406], std=[1, 1, 1]),
+#         ])
+#     def load_cam(self, file, interval_scale=1):
+#         """ read camera txt file """
+#         cam = np.zeros((2, 4, 4))
+#         words = file.read().split()
+#         # read extrinsic
+#         for i in range(0, 4):
+#             for j in range(0, 4):
+#                 extrinsic_index = 4 * i + j + 1
+#                 cam[0][i][j] = words[extrinsic_index]
 
-        # read intrinsic
-        for i in range(0, 3):
-            for j in range(0, 3):
-                intrinsic_index = 3 * i + j + 18
-                cam[1][i][j] = words[intrinsic_index]
+#         # read intrinsic
+#         for i in range(0, 3):
+#             for j in range(0, 3):
+#                 intrinsic_index = 3 * i + j + 18
+#                 cam[1][i][j] = words[intrinsic_index]
 
-        if len(words) == 29:
-            cam[1][3][0] = words[27]
-            cam[1][3][1] = float(words[28]) * interval_scale
-            cam[1][3][2] = 256
-            cam[1][3][3] = cam[1][3][0] + cam[1][3][1] * cam[1][3][2]
-        elif len(words) == 30:
-            cam[1][3][0] = words[27]
-            cam[1][3][1] = float(words[28]) * interval_scale
-            cam[1][3][2] = words[29]
-            cam[1][3][3] = cam[1][3][0] + cam[1][3][1] * cam[1][3][2]
-        elif len(words) == 31:
-            cam[1][3][0] = words[27]
-            cam[1][3][1] = float(words[28]) * interval_scale
-            cam[1][3][2] = words[29]
-            cam[1][3][3] = words[30]
-        else:
-            cam[1][3][0] = 0
-            cam[1][3][1] = 0
-            cam[1][3][2] = 0
-            cam[1][3][3] = 0
-        if self.img_wh is not None:
-            cam[1][0] *= self.img_wh[0]/1600
-            cam[1][1] *= self.img_wh[1]/1200
-        return cam
+#         if len(words) == 29:
+#             cam[1][3][0] = words[27]
+#             cam[1][3][1] = float(words[28]) * interval_scale
+#             cam[1][3][2] = 256
+#             cam[1][3][3] = cam[1][3][0] + cam[1][3][1] * cam[1][3][2]
+#         elif len(words) == 30:
+#             cam[1][3][0] = words[27]
+#             cam[1][3][1] = float(words[28]) * interval_scale
+#             cam[1][3][2] = words[29]
+#             cam[1][3][3] = cam[1][3][0] + cam[1][3][1] * cam[1][3][2]
+#         elif len(words) == 31:
+#             cam[1][3][0] = words[27]
+#             cam[1][3][1] = float(words[28]) * interval_scale
+#             cam[1][3][2] = words[29]
+#             cam[1][3][3] = words[30]
+#         else:
+#             cam[1][3][0] = 0
+#             cam[1][3][1] = 0
+#             cam[1][3][2] = 0
+#             cam[1][3][3] = 0
+#         if self.img_wh is not None:
+#             cam[1][0] *= self.img_wh[0]/1600
+#             cam[1][1] *= self.img_wh[1]/1200
+#         return cam
         
 
-    def __len__(self):
-        return len(self.metas)
+#     def __len__(self):
+#         return len(self.metas)
 
-    def __getitem__(self, idx):
-        sample = {}
-        scan, light_idx, ref_view, src_views = self.metas[idx]
-        # use only the reference view and first nviews-1 source views
-        view_ids = [ref_view]+src_views[:self.n_views-1]
+#     def __getitem__(self, idx):
+#         sample = {}
+#         scan, light_idx, ref_view, src_views = self.metas[idx]
+#         # use only the reference view and first nviews-1 source views
+#         view_ids = [ref_view]+src_views[:self.n_views-1]
 
-        imgs = []
-        cams = []
-        noisy_imgs = []
-        proj_mats = [] # record proj mats between views
-        for i, vid in enumerate(view_ids):
-            # NOTE that the id in image file names is from 1 to 49 (not 0~48)
+#         imgs = []
+#         cams = []
+#         noisy_imgs = []
+#         proj_mats = [] # record proj mats between views
+#         for i, vid in enumerate(view_ids):
+#             # NOTE that the id in image file names is from 1 to 49 (not 0~48)
             
-            img_filename = os.path.join(self.root_dir,
-                            f'Rectified/{scan}_train/rect_{vid+1:03d}_{light_idx}_r5000.png')
-            mask_filename = os.path.join(self.root_dir,
-                            f'Depths/{scan}/depth_visual_{vid:04d}.png')
-            depth_filename = os.path.join(self.root_dir,
-                            f'Depths/{scan}/depth_map_{vid:04d}.pfm')
+#             img_filename = os.path.join(self.root_dir,
+#                             f'Rectified/{scan}_train/rect_{vid+1:03d}_{light_idx}_r5000.png')
+#             mask_filename = os.path.join(self.root_dir,
+#                             f'Depths/{scan}/depth_visual_{vid:04d}.png')
+#             depth_filename = os.path.join(self.root_dir,
+#                             f'Depths/{scan}/depth_map_{vid:04d}.pfm')
         
 
-            img = Image.open(img_filename)
+#             img = Image.open(img_filename)
             
             
-            input_img, gt_img = self.transforms(img, img)
+#             input_img, gt_img = self.transforms(img, img)
             
-            imgs += [gt_img]
+#             imgs += [gt_img]
             
-            if self.train_on_dark:
+#             if self.train_on_dark:
                
-                gamma = np.random.uniform(2, 5)
-                input_img = T.functional.adjust_gamma(input_img, gamma,1e-8
-                                                      )
-                sigmoidB = np.random.uniform(0, 1)
-                sigmoid = np.sqrt(sigmoidB*(25/(255*255))**2)
+#                 gamma = np.random.uniform(2, 5)
+#                 input_img = T.functional.adjust_gamma(input_img, gamma,1e-8
+#                                                       )
+#                 sigmoidB = np.random.uniform(0, 1)
+#                 sigmoid = np.sqrt(sigmoidB*(25/(255*255))**2)
 
-                gaussian_noise = torch.normal(torch.zeros_like(input_img), sigmoid)
+#                 gaussian_noise = torch.normal(torch.zeros_like(input_img), sigmoid)
                 
-                imgs_noisy = input_img + gaussian_noise 
+#                 imgs_noisy = input_img + gaussian_noise 
                 
-                img_noisy = torch.clamp(imgs_noisy, 0, 1)
+#                 img_noisy = torch.clamp(imgs_noisy, 0, 1)
             
-                input_img = img_noisy
-            
-
-            noisy_imgs += [input_img]
-
+#                 input_img = img_noisy
             
 
-            proj_mat_ls, depth_min,cam = self.proj_mats[vid]
-            cams += [cam]
+#             noisy_imgs += [input_img]
+
+            
+
+#             proj_mat_ls, depth_min,cam = self.proj_mats[vid]
+#             cams += [cam]
 
 
 
-            if i == 0:  # reference view
-                sample['init_depth_min'] = torch.FloatTensor([depth_min])
+#             if i == 0:  # reference view
+#                 sample['init_depth_min'] = torch.FloatTensor([depth_min])
                 
-                sample['masks'] = self.read_mask(mask_filename)
-                sample['depths'] = self.read_depth(depth_filename)
-                sample["depth"] = sample["depths"]["level_0"]
-                ref_proj_inv = torch.inverse(proj_mat_ls)
-            else:
-                proj_mats += [proj_mat_ls @ ref_proj_inv]
-        cams = np.stack(cams)
-        cams = torch.tensor(cams)
+#                 sample['masks'] = self.read_mask(mask_filename)
+#                 sample['depths'] = self.read_depth(depth_filename)
+#                 sample["depth"] = sample["depths"]["level_0"]
+#                 ref_proj_inv = torch.inverse(proj_mat_ls)
+#             else:
+#                 proj_mats += [proj_mat_ls @ ref_proj_inv]
+#         cams = np.stack(cams)
+#         cams = torch.tensor(cams)
         
-        imgs = torch.stack(imgs) # (V, 3, H, W)
-        noisy_imgs = torch.stack(noisy_imgs)
-        proj_mats = torch.stack(proj_mats)[:,:,:3] # (V-1, self.levels, 3, 4) from fine to coarse
+#         imgs = torch.stack(imgs) # (V, 3, H, W)
+#         noisy_imgs = torch.stack(noisy_imgs)
+#         proj_mats = torch.stack(proj_mats)[:,:,:3] # (V-1, self.levels, 3, 4) from fine to coarse
         
         
         
-        sample['cams'] = cams
-        sample["imgs"] = noisy_imgs
-        sample['imgs_gt'] = imgs
-        sample['proj_mats'] = proj_mats
-        sample['depth_interval'] = torch.FloatTensor([self.depth_interval])
-        sample['scan_vid'] = (scan, ref_view)
+#         sample['cams'] = cams
+#         sample["imgs"] = noisy_imgs
+#         sample['imgs_gt'] = imgs
+#         sample['proj_mats'] = proj_mats
+#         sample['depth_interval'] = torch.FloatTensor([self.depth_interval])
+#         sample['scan_vid'] = (scan, ref_view)
         
-        return sample
+#         return sample
 
 
     
